@@ -20,14 +20,14 @@ class BatterySimulator:
         return max(0.0, self._charge)
 
     @property
-    def charge_percent(self) -> int:
-        return int(self.charge * 100)
-
-    @property
     def rings_remaining(self) -> int:
         if self._config.ring_drain <= 0:
             return self._config.max_rings
-        return int(self.charge / self._config.ring_drain)
+        return round(self.charge / self._config.ring_drain)
+
+    @property
+    def total_rings(self) -> int:
+        return self._total_rings
 
     @property
     def is_empty(self) -> bool:
@@ -50,7 +50,7 @@ class BatterySimulator:
     def status(self) -> dict:
         """Battery status dict for MQTT publishing."""
         return {
-            "charge_percent": self.charge_percent,
+            "charge_percent": int(self.charge * 100),
             "rings_remaining": self.rings_remaining,
             "ring_count": self._ring_count,
             "total_rings": self._total_rings,

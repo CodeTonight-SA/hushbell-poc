@@ -21,10 +21,11 @@ class TestBatteryDrain:
 
     def test_charge_percent_decreases(self):
         battery = BatterySimulator()
-        assert battery.charge_percent == 100
+        assert battery.status()["charge_percent"] == 100
         for _ in range(600):
             battery.ring()
-        assert 45 <= battery.charge_percent <= 55
+        pct = battery.status()["charge_percent"]
+        assert 45 <= pct <= 55
 
     def test_rings_remaining_accurate(self):
         battery = BatterySimulator()
@@ -41,7 +42,7 @@ class TestRecharge:
         for _ in range(600):
             battery.ring()
         battery.recharge()
-        assert battery.charge_percent == 100
+        assert battery.status()["charge_percent"] == 100
 
     def test_total_rings_persists_across_charges(self):
         battery = BatterySimulator()
