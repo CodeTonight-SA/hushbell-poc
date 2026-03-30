@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "hushbell-poc"
+version = "0.1.0"
+description = "Dog-friendly smart doorbell -- laptop-first proof of concept"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Thomas Frumkin"},
+    {name = "Laurie Scheepers", email = "laurie@codetonight.co.za"},
+]
+dependencies = [
+    "numpy>=1.24",
+    "sounddevice>=0.4",
+    "paho-mqtt>=2.0",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+gui = ["pygame>=2.5"]
+web = ["flask>=3.0"]
+dev = ["pytest>=8.0", "matplotlib>=3.8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
