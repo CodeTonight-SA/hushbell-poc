@@ -27,7 +27,7 @@ def _run_interactive(ctrl: HushBellController) -> None:
 def _build_controller(args: argparse.Namespace) -> HushBellController:
     """Build controller from CLI args (DI-friendly factory)."""
     config = HushBellConfig(http_port=args.port) if args.web else HushBellConfig()
-    ctrl = HushBellController(config)
+    ctrl = HushBellController(config, visual=args.visual)
     if not args.no_mqtt:
         ctrl.connect_mqtt()
     return ctrl
@@ -39,13 +39,15 @@ def main() -> int:
     parser.add_argument("--web", action="store_true", help="Start HTTP trigger")
     parser.add_argument("--no-mqtt", action="store_true", help="Skip MQTT")
     parser.add_argument("--port", type=int, default=8080, help="HTTP port")
+    parser.add_argument("--visual", action="store_true", help="Show pygame LED strip simulator")
+    parser.add_argument("--spectrum", action="store_true", help="Show FFT spectrum after ring")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s", datefmt="%H:%M:%S")
     ctrl = _build_controller(args)
 
     if args.test:
-        print(f"Ring result: {ctrl.ring()}")
+        print(f"Ring result: {ctrl.ring(spectrum=args.spectrum)}")
         return 0
     if args.web:
         from .triggers.http_trigger import start_server
