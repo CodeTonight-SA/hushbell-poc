@@ -1,6 +1,6 @@
 """Real-time FFT spectrum display for HushBell audio.
 
-Shows 0-4000Hz with 40Hz (tactile) and 2kHz (piezo) markers.
+Shows 0-4000Hz with 40Hz (tactile) and dynamic secondary frequency markers.
 Non-blocking -- uses plt.show(block=False).
 """
 import numpy as np
@@ -16,8 +16,12 @@ def _style_dark(ax, fig) -> None:
     ax.title.set_color("#ea580c")
 
 
-def plot_spectrum(samples: np.ndarray, sample_rate: int = 44100) -> None:
-    """Display FFT spectrum of audio samples."""
+def plot_spectrum(
+    samples: np.ndarray,
+    sample_rate: int = 44100,
+    marker_freq: float = 2000.0,
+) -> None:
+    """Display FFT spectrum of audio samples with dynamic frequency marker."""
     import matplotlib.pyplot as plt
 
     fft = np.abs(np.fft.rfft(samples))
@@ -27,7 +31,13 @@ def plot_spectrum(samples: np.ndarray, sample_rate: int = 44100) -> None:
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.plot(freqs[mask], fft[mask], color="#ea580c", linewidth=0.8)
     ax.axvline(40, color="#FFBF00", linestyle="--", alpha=0.7, label="40Hz (tactile)")
-    ax.axvline(2000, color="#FFBF00", linestyle="--", alpha=0.7, label="2000Hz (piezo)")
+    ax.axvline(
+        marker_freq,
+        color="#FFBF00",
+        linestyle="--",
+        alpha=0.7,
+        label=f"{marker_freq:.0f}Hz (piezo)",
+    )
     ax.set_xlabel("Frequency (Hz)")
     ax.set_ylabel("Magnitude")
     ax.set_title("HushBell Frequency Spectrum")
