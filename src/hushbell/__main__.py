@@ -42,6 +42,8 @@ def _build_audio_config(args: argparse.Namespace) -> AudioConfig:
         kwargs["frequency_presets"] = [float(f) for f in args.freq_presets.split(",")]
     if args.envelope:
         kwargs["envelope_type"] = args.envelope
+    if args.pleasant:
+        kwargs["pleasant"] = True
     return AudioConfig(**kwargs)
 
 
@@ -79,6 +81,11 @@ def main() -> int:
         choices=["linear", "sine", "exponential"],
         default="linear",
         help="Fade-in envelope shape (default: linear)",
+    )
+    freq_group.add_argument(
+        "--pleasant",
+        action="store_true",
+        help="Apply harmonic layering + vibrato for warmer tones",
     )
     args = parser.parse_args()
 

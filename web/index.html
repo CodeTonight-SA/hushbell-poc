@@ -331,6 +331,14 @@
         </select>
       </div>
 
+      <div class="freq-row">
+        <label>Pleasant</label>
+        <select id="pleasantMode">
+          <option value="off">Off</option>
+          <option value="on">On (harmonics + vibrato)</option>
+        </select>
+      </div>
+
       <!-- Random mode controls -->
       <div id="randomControls" class="sub-controls">
         <div class="freq-row">
@@ -537,7 +545,6 @@ function handleRing() {
   oscSec.frequency.value = currentSecondaryFreq;
 
   applyEnvelope(gainSec, now, fadeInSec, 0.4);
-  // Fade out at end
   gainSec.gain.setValueAtTime(0.4, now + duration - 0.1);
   gainSec.gain.linearRampToValueAtTime(0, now + duration);
 
@@ -545,6 +552,35 @@ function handleRing() {
   gainSec.connect(analyser);
   oscSec.start(now);
   oscSec.stop(now + duration);
+
+  // Pleasant mode: add soft 3rd harmonic + vibrato oscillator
+  const isPleasant = document.getElementById('pleasantMode').value === 'on';
+  if (isPleasant) {
+    const harmonicFreq = currentSecondaryFreq * 1.25;
+    if (harmonicFreq <= 4000) {
+      const oscHarm = audioCtx.createOscillator();
+      const gainHarm = audioCtx.createGain();
+      oscHarm.type = 'sine';
+      oscHarm.frequency.value = harmonicFreq;
+      applyEnvelope(gainHarm, now, fadeInSec, 0.06);
+      gainHarm.gain.setValueAtTime(0.06, now + duration - 0.1);
+      gainHarm.gain.linearRampToValueAtTime(0, now + duration);
+      oscHarm.connect(gainHarm);
+      gainHarm.connect(analyser);
+      oscHarm.start(now);
+      oscHarm.stop(now + duration);
+    }
+    // Vibrato: modulate secondary frequency at 5Hz, 2% depth
+    const vibratoLFO = audioCtx.createOscillator();
+    const vibratoGain = audioCtx.createGain();
+    vibratoLFO.type = 'sine';
+    vibratoLFO.frequency.value = 5;
+    vibratoGain.gain.value = currentSecondaryFreq * 0.02;
+    vibratoLFO.connect(vibratoGain);
+    vibratoGain.connect(oscSec.frequency);
+    vibratoLFO.start(now);
+    vibratoLFO.stop(now + duration);
+  }
 
   // Update status UI
   const mode = document.getElementById('freqMode').value;

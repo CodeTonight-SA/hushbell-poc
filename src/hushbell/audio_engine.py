@@ -131,22 +131,29 @@ def generate_primary(config: AudioConfig) -> np.ndarray:
     )
 
 
-def generate_secondary(config: AudioConfig, freq_override: float | None = None) -> np.ndarray:
+def generate_secondary(config: AudioConfig, freq_override: float | None = None) -> tuple[np.ndarray, float]:
     """Generate secondary piezo tone with anti-startle fade-in.
 
     The frequency is resolved from the configured strategy unless
     freq_override is provided. Fade-in is ALWAYS applied regardless
     of frequency -- this is the anti-startle safety guarantee.
+
+    When config.pleasant is True, harmonic layering and vibrato are
+    applied for warmer, more musical tones.
     """
     freq = freq_override if freq_override is not None else resolve_secondary_freq(config)
-    return generate_tone(
+    signal = generate_tone(
         freq_hz=freq,
         duration_sec=config.secondary_duration_sec,
         amplitude=config.secondary_amplitude,
         sample_rate=config.sample_rate,
         fade_in_sec=config.secondary_fade_in_sec,
         envelope_type=config.envelope_type,
-    ), freq
+    )
+    if config.pleasant:
+        from .pleasant_tones import make_pleasant
+        signal = make_pleasant(signal, freq, config)
+    return signal, freq
 
 
 def _pad_to_length(signal: np.ndarray, target_len: int) -> np.ndarray:

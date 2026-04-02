@@ -165,3 +165,32 @@ class TestPleasantTones:
         shaped = add_harmonics(signal, freq, dur, sr)
         # Signal should be unchanged (no harmonic added)
         assert np.allclose(signal, shaped)
+
+
+class TestPleasantIntegration:
+    """Pleasant mode integrated into the audio pipeline."""
+
+    def test_pleasant_flag_applies_shaping(self):
+        config = AudioConfig(pleasant=True)
+        signal_plain, _ = generate_secondary(AudioConfig(pleasant=False))
+        signal_pleasant, _ = generate_secondary(config)
+        # Pleasant shaping should alter the signal
+        assert not np.allclose(signal_plain, signal_pleasant, atol=0.001)
+
+    def test_pleasant_still_has_fade_in(self):
+        """PARAMOUNT: pleasant mode must not bypass fade-in."""
+        config = AudioConfig(pleasant=True, secondary_fade_in_sec=0.5)
+        signal, _ = generate_secondary(config)
+        assert abs(signal[0]) < 0.01
+
+    def test_pleasant_safe_amplitude(self):
+        config = AudioConfig(pleasant=True)
+        signal, _ = generate_secondary(config)
+        assert np.max(np.abs(signal)) <= 1.0
+
+    def test_pleasant_with_all_modes(self):
+        for mode in FrequencyMode:
+            config = AudioConfig(frequency_mode=mode, pleasant=True)
+            signal, freq = generate_secondary(config)
+            assert abs(signal[0]) < 0.01, f"Pleasant + {mode.value}: fade-in missing"
+            assert np.max(np.abs(signal)) <= 1.0, f"Pleasant + {mode.value}: clipping"

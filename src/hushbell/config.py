@@ -50,6 +50,9 @@ class AudioConfig(BaseModel):
     # Envelope shape for fade-in (all guarantee anti-startle onset)
     envelope_type: str = Field(default="linear")
 
+    # Pleasant tone shaping (harmonics + vibrato for warmth)
+    pleasant: bool = Field(default=False)
+
     sample_rate: int = Field(default=44100, ge=8000, le=96000)
     play_combined: bool = Field(default=True)
 
