@@ -75,6 +75,8 @@ class MQTTConfig(BaseModel):
     topic_ring: str = Field(default="hushbell/ring")
     topic_status: str = Field(default="hushbell/status")
     topic_battery: str = Field(default="hushbell/battery")
+    topic_config: str = Field(default="hushbell/config")
+    topic_config_state: str = Field(default="hushbell/config/state")
     client_id: str = Field(default="hushbell-poc")
 
 

@@ -15,7 +15,7 @@ Thomas Frumkin's design from the AI Craftspeople Guild.
 - `src/hushbell/config.py` -- Pydantic settings with frequency strategy config
 - `src/hushbell/spectrum.py` -- Real-time FFT visualiser with dynamic markers
 - `src/hushbell/triggers/` -- Input sources (keyboard, MQTT, HTTP)
-- `tests/` -- Pytest suite with FFT verification (60 tests)
+- `tests/` -- Pytest suite with FFT verification (87 tests)
 - `web/` -- Browser demo (Web Audio API, frequency controls)
 
 ## Key Parameters
@@ -26,7 +26,7 @@ Thomas Frumkin's design from the AI Craftspeople Guild.
 - Fade-in: ALWAYS applied (anti-startle safety guarantee)
 - Envelope types: linear, sine, exponential
 - Battery: 1200 rings/charge (simulated)
-- MQTT topics: hushbell/ring, hushbell/status, hushbell/battery
+- MQTT topics: hushbell/ring, hushbell/status, hushbell/battery, hushbell/config, hushbell/config/state
 - Visual: Warm amber (#FFBF00), WS2812B simulation
 
 ## Frequency Modes (Anti-Conditioning)
@@ -46,9 +46,14 @@ python -m hushbell --freq-mode random       # Random frequency per ring
 python -m hushbell --freq-mode vagal        # Pleasant vagal range
 python -m hushbell --freq-mode preset --freq-presets 800,1000,1500
 python -m hushbell --envelope sine          # Smoother fade-in curve
+python -m hushbell --pleasant               # Harmonic layering + vibrato
 python -m hushbell --web                    # Start HTTP trigger server
 python -m hushbell --test --spectrum        # Single ring with FFT display
-PYTHONPATH=src pytest tests/                # Run tests (60 tests)
+PYTHONPATH=src pytest tests/                # Run tests (87 tests)
+
+# MQTT runtime config (publish to broker):
+mosquitto_pub -t hushbell/config -m '{"frequency_mode": "vagal", "pleasant": true}'
+mosquitto_pub -t hushbell/config -m '{"envelope_type": "sine"}'
 ```
 
 ## Principles
