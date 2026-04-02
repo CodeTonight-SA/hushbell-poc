@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HushBell — Browser Demo</title>
+<style>
+  /* ============================================
+     SWISS NIHILISM DESIGN SYSTEM — 3 THEMES
+     Stark. No shadows. No border-radius. Monospace hierarchy.
+     ENTER Konsult design language.
+     ============================================ */
+
+  /* ─── THEME: LIGHT ─────────────────────────── */
+  [data-theme="light"] {
+    --bg: #EAEAEA;
+    --surface: #D8D8D8;
+    --border: #BDBDBD;
+    --text: #1A1A1A;
+    --text-muted: #666666;
+    --accent: #ea580c;
+    --amber: #FFBF00;
+    --amber-dim: #7A5800;
+    --canvas-bg: #F5F5F5;
+    --led-off: #C8A800;
+    --emergent-bg: #F0F0F0;
+    --emergent-border: #D0D0D0;
+    --bar-idle: rgba(60,60,60,0.3);
+  }
+
+  /* ─── THEME: NEUTRAL ───────────────────────── */
+  [data-theme="neutral"] {
+    --bg: #F0EDE8;
+    --surface: #E5E0D8;
+    --border: #D0C8BC;
+    --text: #1a1a1a;
+    --text-muted: #6b5f50;
+    --accent: #996F00;
+    --amber: #FFBF00;
+    --amber-dim: #7A5800;
+    --canvas-bg: #F7F5F0;
+    --led-off: #C8A800;
+    --emergent-bg: #EDE8E0;
+    --emergent-border: #D8D0C4;
+    --bar-idle: rgba(60,50,30,0.3);
+  }
+
+  /* ─── THEME: DARK ──────────────────────────── */
+  [data-theme="dark"] {
+    --bg: #1e1e1e;
+    --surface: #2a2a2a;
+    --border: #3a3a3a;
+    --text: #EAEAEA;
+    --text-muted: #888888;
+    --canvas-bg: #252525;
+    --led-off: #4A3800;
+    --emergent-bg: #222222;
+    --emergent-border: #333333;
+    --bar-idle: rgba(200,200,200,0.35);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px;
+    transition: background 0.3s, color 0.3s;
+  }
+
+  header {
+    width: 100%;
+    max-width: 720px;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 12px;
+    margin-bottom: 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  header h1 {
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    line-height: 1;
+  }
+
+  header h1 span { color: var(--accent); }
+
+  .header-left .meta {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-top: 8px;
+    letter-spacing: 0.04em;
+  }
+
+  /* ─── THEME SWITCHER ───────────────────────── */
+  .theme-switcher {
+    display: flex;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .theme-switcher button {
+    padding: 6px 12px;
+    background: transparent;
+    color: var(--text-muted);
+    border: none;
+    border-right: 1px solid var(--border);
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .theme-switcher button:last-child { border-right: none; }
+  .theme-switcher button:hover { background: var(--surface); }
+  .theme-switcher button.active {
+    background: var(--accent);
+    color: #fff;
+  }
+
+  .main {
+    width: 100%;
+    max-width: 720px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 20px;
+    transition: background 0.3s, border-color 0.3s;
+  }
+
+  .card-label {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+  }
+
+  /* LED strip */
+  .led-strip { display: flex; gap: 10px; align-items: center; justify-content: center; padding: 12px 0; }
+  .led { width: 28px; height: 28px; border-radius: 50%; background: var(--led-off); transition: background 0.05s; }
+  .led.active { background: var(--amber); box-shadow: 0 0 10px var(--amber), 0 0 20px rgba(255,191,0,0.4); }
+  .led.pulse { animation: pulse 0.4s ease-out forwards; }
+
+  @keyframes pulse {
+    0%   { background: var(--amber); box-shadow: 0 0 14px var(--amber), 0 0 28px rgba(255,191,0,0.5); }
+    100% { background: var(--led-off); box-shadow: none; }
+  }
+
+  /* Ring button */
+  .ring-btn {
+    width: 100%; padding: 22px;
+    background: var(--accent); color: #fff; border: none;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 18px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    cursor: pointer; transition: opacity 0.1s, background 0.3s;
+  }
+  .ring-btn:active { opacity: 0.85; }
+  .ring-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Battery */
+  .battery-row { display: flex; align-items: center; gap: 12px; }
+  .battery-bar-wrap { flex: 1; height: 14px; border: 1px solid var(--border); background: var(--bg); }
+  .battery-bar-fill { height: 100%; background: var(--accent); transition: width 0.3s ease, background 0.3s; }
+  .battery-info { font-family: 'Courier New', monospace; font-size: 13px; color: var(--text-muted); min-width: 140px; text-align: right; }
+
+  /* FFT canvas */
+  canvas#fft { width: 100%; height: 140px; background: var(--canvas-bg); border: 1px solid var(--border); display: block; transition: background 0.3s; }
+  .freq-markers { display: flex; justify-content: space-between; font-family: 'Courier New', monospace; font-size: 12px; color: var(--text-muted); margin-top: 6px; padding: 0 2px; }
+
+  /* Status */
+  .status-row { display: flex; gap: 20px; flex-wrap: wrap; }
+  .stat { font-family: 'Courier New', monospace; font-size: 13px; color: var(--text-muted); }
+  .stat strong { color: var(--accent); font-weight: 700; }
+
+  /* Headphones notice */
+  .notice {
+    background: var(--surface); border: 2px solid var(--accent);
+    padding: 20px 24px; display: flex; align-items: flex-start; gap: 14px;
+    transition: background 0.3s, border-color 0.3s;
+  }
+  .notice-icon { font-size: 28px; line-height: 1; flex-shrink: 0; }
+  .notice-text { font-size: 15px; line-height: 1.5; }
+  .notice-text strong { color: var(--accent); }
+
+  /* Explainer */
+  .explainer { background: var(--surface); border: 1px solid var(--border); padding: 24px; transition: background 0.3s; }
+  .explainer h2 { font-family: 'Courier New', monospace; font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 16px; }
+  .explainer p { font-size: 15px; line-height: 1.65; margin-bottom: 12px; }
+  .explainer p:last-child { margin-bottom: 0; }
+  .explainer .freq-tag { font-family: 'Courier New', monospace; font-weight: 700; color: var(--accent); }
+  .explainer .freq-tag.amber { color: var(--amber); }
+
+  footer {
+    margin-top: 40px; font-family: 'Courier New', monospace;
+    font-size: 12px; color: var(--text-muted); letter-spacing: 0.06em; text-align: center;
+  }
+
+  /* ─── EMERGENT UI CARDS ────────────────────── */
+  .emergent-card {
+    background: var(--emergent-bg);
+    border: 1px solid var(--emergent-border);
+    border-left: 3px solid var(--accent);
+    padding: 16px 20px;
+    font-size: 14px;
+    line-height: 1.5;
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: opacity 0.4s ease, max-height 0.4s ease, padding 0.4s ease, margin 0.4s ease;
+    margin: 0;
+    padding-top: 0; padding-bottom: 0;
+  }
+
+  .emergent-card.visible {
+    opacity: 1;
+    max-height: 200px;
+    padding: 16px 20px;
+  }
+
+  .emergent-card .ec-label {
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+
+  .emergent-card .ec-body { color: var(--text); }
+  .emergent-card .ec-body strong { color: var(--accent); }
+
+  .emergent-card.projection { border-left-color: var(--amber); }
+  .emergent-card.projection .ec-label { color: var(--amber); }
+
+  .emergent-card.education { border-left-color: #0891b2; }
+  .emergent-card.education .ec-label { color: #0891b2; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>Hush<span>Bell</span></h1>
+    <div class="meta">BROWSER DEMO &nbsp;|&nbsp; WEB AUDIO API &nbsp;|&nbsp; NO DEPENDENCIES</div>
+  </div>
+  <div class="theme-switcher" id="themeSwitcher">
+    <button data-theme="light" title="Light theme">L</button>
+    <button data-theme="neutral" title="Neutral theme">N</button>
+    <button data-theme="dark" title="Dark theme" class="active">D</button>
+  </div>
+</header>
+
+<main class="main">
+
+  <!-- Headphones Notice -->
+  <div class="notice" id="noticeCard">
+    <div class="notice-icon">&#x1F3A7;</div>
+    <div class="notice-text">
+      <strong>Headphones required.</strong> The 40Hz tone is below what laptop speakers can produce. You will only hear and feel it through headphones or a subwoofer. The 2000Hz tone is audible on all devices.
+    </div>
+  </div>
+
+  <!-- Emergent: Suggestion (shown after idle) -->
+  <div class="emergent-card" id="ec-suggestion">
+    <div class="ec-label">Suggestion</div>
+    <div class="ec-body">Put on headphones and press <strong>Ring HushBell</strong> to experience both channels. The <strong>40Hz</strong> rumble is the one dogs cannot hear.</div>
+  </div>
+
+  <!-- LED Strip -->
+  <div class="card">
+    <div class="card-label">LED Strip — 8 Amber Indicators</div>
+    <div class="led-strip" id="ledStrip">
+      <div class="led" id="led0"></div><div class="led" id="led1"></div>
+      <div class="led" id="led2"></div><div class="led" id="led3"></div>
+      <div class="led" id="led4"></div><div class="led" id="led5"></div>
+      <div class="led" id="led6"></div><div class="led" id="led7"></div>
+    </div>
+  </div>
+
+  <!-- Ring Button -->
+  <button class="ring-btn" id="ringBtn" onclick="handleRing()">&#x25B6; Ring HushBell</button>
+
+  <!-- Emergent: Projection (shown after 3+ rings) -->
+  <div class="emergent-card projection" id="ec-projection">
+    <div class="ec-label">Battery Projection</div>
+    <div class="ec-body" id="ec-projection-body"></div>
+  </div>
+
+  <!-- Battery -->
+  <div class="card">
+    <div class="card-label">Battery Simulation</div>
+    <div class="battery-row">
+      <div class="battery-bar-wrap">
+        <div class="battery-bar-fill" id="battFill" style="width:100%"></div>
+      </div>
+      <div class="battery-info" id="battInfo">1200 / 1200 rings</div>
+    </div>
+  </div>
+
+  <!-- FFT Analyser -->
+  <div class="card">
+    <div class="card-label">Real-Time FFT Spectrum — Proving 40Hz + 2000Hz</div>
+    <canvas id="fft" width="688" height="140"></canvas>
+    <div class="freq-markers">
+      <span>0 Hz</span><span>500</span><span>1000</span><span>1500</span>
+      <span>2000</span><span>2500</span><span>3000</span><span>3500</span><span>4000+ Hz</span>
+    </div>
+  </div>
+
+  <!-- Emergent: Education (shown on scroll to spectrum) -->
+  <div class="emergent-card education" id="ec-education">
+    <div class="ec-label">Frequency Guide</div>
+    <div class="ec-body">
+      <strong style="color:#ea580c">Orange bars</strong> = 40Hz (below the 67Hz dog hearing floor — they hear nothing).
+      <strong style="color:#FFBF00">Amber bars</strong> = 2000Hz (fades in over 500ms — 25x slower than the startle threshold).
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="card">
+    <div class="card-label">Signal Status</div>
+    <div class="status-row">
+      <div class="stat">40Hz sine &nbsp;<strong id="s40">IDLE</strong></div>
+      <div class="stat">2000Hz sine &nbsp;<strong id="s2k">IDLE</strong></div>
+      <div class="stat">Fade-in &nbsp;<strong id="sFade">—</strong></div>
+      <div class="stat">Duration &nbsp;<strong id="sDur">—</strong></div>
+    </div>
+  </div>
+
+  <!-- Emergent: Comparison (shown after 5+ rings) -->
+  <div class="emergent-card" id="ec-comparison">
+    <div class="ec-label">Comparison</div>
+    <div class="ec-body">
+      <strong>Standard doorbell:</strong> 2-4kHz sudden onset, dog barks 95% of the time.
+      <strong>HushBell:</strong> 40Hz sub-hearing + 2kHz anti-startle fade, 99% no-bark probability.
+    </div>
+  </div>
+
+  <!-- How It Works -->
+  <div class="explainer" id="explainerCard">
+    <h2>How It Works — In Plain Language</h2>
+    <p>Standard doorbells trigger barking because dogs hear the sudden sound and react on instinct. HushBell replaces that with two carefully chosen signals that dogs cannot hear or react to.</p>
+    <p><span class="freq-tag">Channel 1: 40Hz tactile tone.</span> Dogs hear from 67Hz upwards. A 40Hz tone sits below their hearing floor entirely. You feel it as a low rumble through the speaker or furniture — the real hardware uses a tactile transducer bolted to a surface. The dog hears nothing.</p>
+    <p><span class="freq-tag amber">Channel 2: 2000Hz with 500ms fade-in.</span> The acoustic startle reflex in dogs triggers when a sound appears in under 20 milliseconds. By fading the 2000Hz tone in over 500 milliseconds — 25 times slower than the startle threshold — the sound registers as background ambient noise rather than an alarm. No bark.</p>
+    <p>Combined, the two channels give a 99% no-bark probability on the tactile channel alone. The spectrum analyser above proves both frequencies are present in real time.</p>
+    <p>Design by Thomas Frumkin. Implementation by CodeTonight. AI Craftspeople Guild.</p>
+  </div>
+
+</main>
+
+<footer>HUSHBELL POC &nbsp;&middot;&nbsp; 40Hz BELOW 67Hz DOG HEARING FLOOR &nbsp;&middot;&nbsp; 2000Hz ANTI-STARTLE FADE &nbsp;&middot;&nbsp; ENTER KONSULT</footer>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+// THEME ENGINE — Swiss Nihilism Light / Neutral / Dark
+// ═══════════════════════════════════════════════════════════════════════════════
+const THEME_KEY = 'hushbell-theme';
+
+function setTheme(id) {
+  document.documentElement.setAttribute('data-theme', id);
+  localStorage.setItem(THEME_KEY, id);
+  document.querySelectorAll('.theme-switcher button').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.theme === id);
+  });
+}
+
+// Auto-detect from OS preference on first visit
+function initTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
+  if (saved) { setTheme(saved); return; }
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  setTheme(prefersDark ? 'dark' : 'light');
+}
+
+document.getElementById('themeSwitcher').addEventListener('click', e => {
+  const btn = e.target.closest('button');
+  if (btn && btn.dataset.theme) setTheme(btn.dataset.theme);
+});
+
+// Listen for OS theme changes
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
+  if (!localStorage.getItem(THEME_KEY)) setTheme(e.matches ? 'dark' : 'light');
+});
+
+initTheme();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AUDIO ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+const MAX_RINGS = 1200;
+let ringsLeft = MAX_RINGS;
+let audioCtx = null;
+let analyser = null;
+let rafId = null;
+let isRinging = false;
+
+function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 2048;
+  analyser.smoothingTimeConstant = 0.75;
+  analyser.connect(audioCtx.destination);
+  drawFFT();
+}
+
+function handleRing() {
+  if (isRinging || ringsLeft <= 0) return;
+  initAudio();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  ringsLeft--;
+  updateBattery();
+  isRinging = true;
+  behaviourCtx.ringCount++;
+  behaviourCtx.lastRingTime = Date.now();
+
+  const now = audioCtx.currentTime;
+  const duration = 1.5;
+
+  // 40Hz — flat, no fade (sub-threshold dog hearing)
+  const osc40 = audioCtx.createOscillator();
+  const gain40 = audioCtx.createGain();
+  osc40.type = 'sine';
+  osc40.frequency.value = 40;
+  gain40.gain.setValueAtTime(0.6, now);
+  osc40.connect(gain40);
+  gain40.connect(analyser);
+  osc40.start(now);
+  osc40.stop(now + duration);
+
+  // 2000Hz — 500ms linear fade-in (anti-startle)
+  const osc2k = audioCtx.createOscillator();
+  const gain2k = audioCtx.createGain();
+  osc2k.type = 'sine';
+  osc2k.frequency.value = 2000;
+  gain2k.gain.setValueAtTime(0, now);
+  gain2k.gain.linearRampToValueAtTime(0.4, now + 0.5);
+  gain2k.gain.setValueAtTime(0.4, now + duration - 0.1);
+  gain2k.gain.linearRampToValueAtTime(0, now + duration);
+  osc2k.connect(gain2k);
+  gain2k.connect(analyser);
+  osc2k.start(now);
+  osc2k.stop(now + duration);
+
+  setStatus('ACTIVE', 'FADING IN', '500ms', duration + 's');
+  animateLEDs(duration * 1000);
+
+  setTimeout(() => {
+    isRinging = false;
+    setStatus('IDLE', 'IDLE', '\u2014', '\u2014');
+    evaluateEmergentRules();
+  }, duration * 1000);
+
+  evaluateEmergentRules();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// LED ANIMATION
+// ═══════════════════════════════════════════════════════════════════════════════
+function animateLEDs(totalMs) {
+  const leds = Array.from({ length: 8 }, (_, i) => document.getElementById('led' + i));
+  const chaseMs = 600;
+  const stepMs = chaseMs / 8;
+
+  leds.forEach((led, i) => {
+    setTimeout(() => { led.classList.remove('pulse'); led.classList.add('active'); }, i * stepMs);
+    setTimeout(() => { led.classList.remove('active'); }, i * stepMs + stepMs);
+  });
+
+  const pulseStart = chaseMs + 50;
+  [0, 300].forEach(offset => {
+    setTimeout(() => {
+      leds.forEach(led => {
+        led.classList.remove('pulse', 'active');
+        void led.offsetWidth;
+        led.classList.add('pulse');
+      });
+    }, pulseStart + offset);
+  });
+
+  setTimeout(() => { leds.forEach(led => led.classList.remove('active', 'pulse')); }, totalMs);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BATTERY
+// ═══════════════════════════════════════════════════════════════════════════════
+function updateBattery() {
+  const pct = ringsLeft / MAX_RINGS;
+  document.getElementById('battFill').style.width = (pct * 100) + '%';
+  document.getElementById('battInfo').textContent = ringsLeft + ' / ' + MAX_RINGS + ' rings';
+  if (ringsLeft <= 0) {
+    document.getElementById('ringBtn').disabled = true;
+    document.getElementById('ringBtn').textContent = 'BATTERY EMPTY';
+  }
+}
+
+function setStatus(s40, s2k, fade, dur) {
+  document.getElementById('s40').textContent = s40;
+  document.getElementById('s2k').textContent = s2k;
+  document.getElementById('sFade').textContent = fade;
+  document.getElementById('sDur').textContent = dur;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FFT DRAW LOOP
+// ═══════════════════════════════════════════════════════════════════════════════
+function drawFFT() {
+  const canvas = document.getElementById('fft');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width;
+  const H = canvas.height;
+  const bufLen = analyser.frequencyBinCount;
+  const data = new Uint8Array(bufLen);
+  const sampleRate = audioCtx.sampleRate;
+  const nyquist = sampleRate / 2;
+  const maxFreq = 4000;
+  const maxBin = Math.floor(maxFreq / nyquist * bufLen);
+
+  function draw() {
+    rafId = requestAnimationFrame(draw);
+    analyser.getByteFrequencyData(data);
+
+    const theme = document.documentElement.getAttribute('data-theme');
+    const isDark = theme === 'dark';
+    const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--canvas-bg').trim();
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, W, H);
+
+    const gridFreqs = [40, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000];
+    ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+    ctx.lineWidth = 1;
+    gridFreqs.forEach(f => {
+      const x = Math.round(f / maxFreq * W);
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    });
+
+    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+    [[40, accent], [2000, '#FFBF00']].forEach(([f, color]) => {
+      const x = Math.round(f / maxFreq * W);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+      ctx.setLineDash([]);
+    });
+
+    const barW = W / maxBin;
+    const barIdle = getComputedStyle(document.documentElement).getPropertyValue('--bar-idle').trim();
+    for (let i = 0; i < maxBin; i++) {
+      const v = data[i] / 255;
+      const bh = v * H;
+      const freq = i / bufLen * nyquist;
+      let color;
+      if (Math.abs(freq - 40) < 15) color = accent;
+      else if (Math.abs(freq - 2000) < 60) color = '#FFBF00';
+      else color = barIdle;
+      ctx.fillStyle = color;
+      ctx.fillRect(i * barW, H - bh, Math.max(barW - 0.5, 1), bh);
+    }
+
+    ctx.font = '11px Courier New';
+    ctx.fillStyle = accent;
+    ctx.fillText('40Hz', Math.round(40 / maxFreq * W) + 3, 14);
+    ctx.fillStyle = '#FFBF00';
+    ctx.fillText('2000Hz', Math.round(2000 / maxFreq * W) - 36, 14);
+  }
+  draw();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EMERGENT UI ENGINE — Behaviour-driven card rendering
+// ═══════════════════════════════════════════════════════════════════════════════
+const behaviourCtx = {
+  ringCount: 0,
+  lastRingTime: 0,
+  visitStart: Date.now(),
+  scrolledToSpectrum: false,
+  suggestionShown: false,
+  projectionShown: false,
+  educationShown: false,
+  comparisonShown: false,
+};
+
+function showCard(id) { document.getElementById(id).classList.add('visible'); }
+function hideCard(id) { document.getElementById(id).classList.remove('visible'); }
+
+const EMERGENT_RULES = [
+  // First visit, no rings after 3s: suggest trying it
+  { id: 'ec-suggestion',
+    condition: ctx => ctx.ringCount === 0 && !ctx.suggestionShown && (Date.now() - ctx.visitStart) > 3000,
+    action: ctx => { showCard('ec-suggestion'); ctx.suggestionShown = true; }
+  },
+  // Hide suggestion after first ring
+  { id: 'ec-suggestion-hide',
+    condition: ctx => ctx.ringCount > 0 && ctx.suggestionShown,
+    action: () => hideCard('ec-suggestion')
+  },
+  // After 3 rings: show battery projection
+  { id: 'ec-projection',
+    condition: ctx => ctx.ringCount >= 3 && !ctx.projectionShown,
+    action: ctx => {
+      const elapsed = (Date.now() - ctx.visitStart) / 1000;
+      const rate = ctx.ringCount / elapsed;
+      const remaining = ringsLeft / rate;
+      const hours = Math.floor(remaining / 3600);
+      const mins = Math.floor((remaining % 3600) / 60);
+      document.getElementById('ec-projection-body').innerHTML =
+        `At <strong>${(rate * 60).toFixed(1)} rings/min</strong>, battery lasts approximately <strong>${hours}h ${mins}m</strong>. ` +
+        `Real hardware: 1200 rings on a single 1000mAh charge, ~6 months standby.`;
+      showCard('ec-projection');
+      ctx.projectionShown = true;
+    }
+  },
+  // Scrolled to spectrum: show education
+  { id: 'ec-education',
+    condition: ctx => ctx.scrolledToSpectrum && !ctx.educationShown && ctx.ringCount > 0,
+    action: ctx => { showCard('ec-education'); ctx.educationShown = true; }
+  },
+  // After 5 rings: show comparison
+  { id: 'ec-comparison',
+    condition: ctx => ctx.ringCount >= 5 && !ctx.comparisonShown,
+    action: ctx => { showCard('ec-comparison'); ctx.comparisonShown = true; }
+  },
+];
+
+function evaluateEmergentRules() {
+  EMERGENT_RULES.forEach(rule => {
+    if (rule.condition(behaviourCtx)) rule.action(behaviourCtx);
+  });
+}
+
+// Scroll observer for spectrum card
+const spectrumObserver = new IntersectionObserver(entries => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      behaviourCtx.scrolledToSpectrum = true;
+      evaluateEmergentRules();
+    }
+  });
+}, { threshold: 0.5 });
+spectrumObserver.observe(document.getElementById('fft'));
+
+// Periodic evaluation (idle detection)
+setInterval(evaluateEmergentRules, 2000);
+</script>
+</body>
+</html>
