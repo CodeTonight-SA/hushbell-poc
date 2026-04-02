@@ -191,6 +191,71 @@
     padding: 0 2px;
   }
 
+  /* Frequency controls */
+  .freq-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .freq-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .freq-row label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    min-width: 80px;
+  }
+
+  .freq-row select,
+  .freq-row input[type="range"] {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 4px 6px;
+  }
+
+  .freq-row .range-val {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--accent);
+    min-width: 55px;
+    text-align: right;
+  }
+
+  .preset-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .preset-chip {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+
+  .preset-chip.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--surface);
+  }
+
+  .sub-controls { display: none; }
+  .sub-controls.visible { display: flex; flex-direction: column; gap: 8px; }
+
   /* Status */
   .status-row {
     display: flex;
@@ -243,6 +308,67 @@
     </div>
   </div>
 
+  <!-- Frequency Anti-Conditioning Controls -->
+  <div class="card">
+    <div class="card-label">Frequency Mode — Anti-Conditioning</div>
+    <div class="freq-controls">
+      <div class="freq-row">
+        <label>Mode</label>
+        <select id="freqMode" onchange="onFreqModeChange()">
+          <option value="fixed">Fixed (2000Hz)</option>
+          <option value="random">Random</option>
+          <option value="preset">Preset Rotation</option>
+          <option value="vagal">Vagal (Pleasant)</option>
+        </select>
+      </div>
+
+      <div class="freq-row">
+        <label>Envelope</label>
+        <select id="envelopeType">
+          <option value="linear">Linear</option>
+          <option value="sine">Sine (smoother)</option>
+          <option value="exponential">Exponential (gentle)</option>
+        </select>
+      </div>
+
+      <!-- Random mode controls -->
+      <div id="randomControls" class="sub-controls">
+        <div class="freq-row">
+          <label>Min Hz</label>
+          <input type="range" id="freqMin" min="500" max="3500" value="800" oninput="updateRangeLabel('freqMin','freqMinVal')">
+          <span class="range-val" id="freqMinVal">800 Hz</span>
+        </div>
+        <div class="freq-row">
+          <label>Max Hz</label>
+          <input type="range" id="freqMax" min="500" max="4000" value="3500" oninput="updateRangeLabel('freqMax','freqMaxVal')">
+          <span class="range-val" id="freqMaxVal">3500 Hz</span>
+        </div>
+      </div>
+
+      <!-- Preset mode controls -->
+      <div id="presetControls" class="sub-controls">
+        <div class="freq-row">
+          <label>Presets</label>
+          <div class="preset-chips" id="presetChips"></div>
+        </div>
+      </div>
+
+      <!-- Vagal mode controls -->
+      <div id="vagalControls" class="sub-controls">
+        <div class="freq-row">
+          <label>Centre</label>
+          <input type="range" id="vagalCenter" min="500" max="1500" value="900" oninput="updateRangeLabel('vagalCenter','vagalCenterVal')">
+          <span class="range-val" id="vagalCenterVal">900 Hz</span>
+        </div>
+        <div class="freq-row">
+          <label>Spread</label>
+          <input type="range" id="vagalSpread" min="50" max="500" value="200" oninput="updateRangeLabel('vagalSpread','vagalSpreadVal')">
+          <span class="range-val" id="vagalSpreadVal">+/- 200</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Ring Button -->
   <button class="ring-btn" id="ringBtn" onclick="handleRing()">
     ▶ Ring HushBell
@@ -281,7 +407,8 @@
     <div class="card-label">Signal Status</div>
     <div class="status-row">
       <div class="stat">40Hz sine &nbsp;<strong id="s40">IDLE</strong></div>
-      <div class="stat">2000Hz sine &nbsp;<strong id="s2k">IDLE</strong></div>
+      <div class="stat">Secondary &nbsp;<strong id="s2k">IDLE</strong></div>
+      <div class="stat">Freq &nbsp;<strong id="sFreq">—</strong></div>
       <div class="stat">Fade-in &nbsp;<strong id="sFade">—</strong></div>
       <div class="stat">Duration &nbsp;<strong id="sDur">—</strong></div>
     </div>
@@ -289,7 +416,7 @@
 
 </main>
 
-<footer>HUSHBELL POC &nbsp;·&nbsp; 40Hz BELOW 67Hz DOG HEARING FLOOR &nbsp;·&nbsp; 2000Hz ANTI-STARTLE FADE</footer>
+<footer>HUSHBELL POC &nbsp;·&nbsp; 40Hz BELOW 67Hz DOG HEARING FLOOR &nbsp;·&nbsp; ANTI-STARTLE FADE &nbsp;·&nbsp; ANTI-CONDITIONING</footer>
 
 <script>
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -299,6 +426,10 @@ let audioCtx = null;
 let analyser = null;
 let rafId = null;
 let isRinging = false;
+let currentSecondaryFreq = 2000; // tracks the actual frequency used this ring
+let presetIndex = 0;
+const DEFAULT_PRESETS = [1000, 1500, 2000, 2500, 3000];
+let activePresets = [...DEFAULT_PRESETS];
 
 // ─── Audio setup (lazy init to satisfy autoplay policy) ──────────────────────
 function initAudio() {
@@ -309,6 +440,68 @@ function initAudio() {
   analyser.smoothingTimeConstant = 0.75;
   analyser.connect(audioCtx.destination);
   drawFFT();
+}
+
+// ─── Frequency resolution (mirrors Python resolve_secondary_freq) ────────────
+function resolveFrequency() {
+  const mode = document.getElementById('freqMode').value;
+  switch (mode) {
+    case 'fixed':
+      return 2000;
+    case 'random': {
+      const min = parseInt(document.getElementById('freqMin').value);
+      const max = parseInt(document.getElementById('freqMax').value);
+      return min + Math.random() * (max - min);
+    }
+    case 'preset': {
+      if (activePresets.length === 0) return 2000;
+      const freq = activePresets[presetIndex % activePresets.length];
+      presetIndex++;
+      return freq;
+    }
+    case 'vagal': {
+      const center = parseInt(document.getElementById('vagalCenter').value);
+      const spread = parseInt(document.getElementById('vagalSpread').value);
+      // Box-Muller for Gaussian
+      const u1 = Math.random(), u2 = Math.random();
+      const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+      return Math.max(500, Math.min(4000, center + z * spread));
+    }
+    default:
+      return 2000;
+  }
+}
+
+// ─── Envelope application (all types guarantee zero onset) ───────────────────
+function applyEnvelope(gainNode, now, fadeInSec, peakGain) {
+  const envType = document.getElementById('envelopeType').value;
+  gainNode.gain.setValueAtTime(0, now);
+
+  switch (envType) {
+    case 'linear':
+      gainNode.gain.linearRampToValueAtTime(peakGain, now + fadeInSec);
+      break;
+    case 'sine': {
+      // Quarter-sine approximation via exponential ramp
+      const steps = 20;
+      for (let i = 1; i <= steps; i++) {
+        const t = i / steps;
+        const v = Math.sin(t * Math.PI / 2) * peakGain;
+        gainNode.gain.linearRampToValueAtTime(v, now + t * fadeInSec);
+      }
+      break;
+    }
+    case 'exponential': {
+      // Gentle exponential rise
+      const steps = 20;
+      for (let i = 1; i <= steps; i++) {
+        const t = i / steps;
+        const v = ((Math.exp(3 * t) - 1) / (Math.exp(3) - 1)) * peakGain;
+        gainNode.gain.linearRampToValueAtTime(v, now + t * fadeInSec);
+      }
+      break;
+    }
+  }
 }
 
 // ─── Ring handler ─────────────────────────────────────────────────────────────
@@ -322,7 +515,8 @@ function handleRing() {
   isRinging = true;
 
   const now = audioCtx.currentTime;
-  const duration = 1.5; // seconds
+  const duration = 1.5;
+  const fadeInSec = 0.5;
 
   // 40Hz — flat, no fade (sub-threshold dog hearing)
   const osc40 = audioCtx.createOscillator();
@@ -335,31 +529,72 @@ function handleRing() {
   osc40.start(now);
   osc40.stop(now + duration);
 
-  // 2000Hz — 500ms linear fade-in (anti-startle)
-  const osc2k = audioCtx.createOscillator();
-  const gain2k = audioCtx.createGain();
-  osc2k.type = 'sine';
-  osc2k.frequency.value = 2000;
-  gain2k.gain.setValueAtTime(0, now);
-  gain2k.gain.linearRampToValueAtTime(0.4, now + 0.5);
-  gain2k.gain.setValueAtTime(0.4, now + duration - 0.1);
-  gain2k.gain.linearRampToValueAtTime(0, now + duration);
-  osc2k.connect(gain2k);
-  gain2k.connect(analyser);
-  osc2k.start(now);
-  osc2k.stop(now + duration);
+  // Secondary — variable frequency with anti-startle fade-in (ALWAYS applied)
+  currentSecondaryFreq = resolveFrequency();
+  const oscSec = audioCtx.createOscillator();
+  const gainSec = audioCtx.createGain();
+  oscSec.type = 'sine';
+  oscSec.frequency.value = currentSecondaryFreq;
+
+  applyEnvelope(gainSec, now, fadeInSec, 0.4);
+  // Fade out at end
+  gainSec.gain.setValueAtTime(0.4, now + duration - 0.1);
+  gainSec.gain.linearRampToValueAtTime(0, now + duration);
+
+  oscSec.connect(gainSec);
+  gainSec.connect(analyser);
+  oscSec.start(now);
+  oscSec.stop(now + duration);
 
   // Update status UI
-  setStatus('ACTIVE', 'FADING IN', '500ms', duration + 's');
+  const mode = document.getElementById('freqMode').value;
+  const envType = document.getElementById('envelopeType').value;
+  setStatus('ACTIVE', 'FADING IN', Math.round(currentSecondaryFreq) + 'Hz', envType + ' ' + fadeInSec + 's', duration + 's');
 
-  // Animate LEDs: chase then pulse
+  // Animate LEDs
   animateLEDs(duration * 1000);
 
-  // Reset after ring completes
+  // Reset after ring
   setTimeout(() => {
     isRinging = false;
-    setStatus('IDLE', 'IDLE', '—', '—');
+    setStatus('IDLE', 'IDLE', '—', '—', '—');
   }, duration * 1000);
+}
+
+// ─── Frequency mode UI switching ──────────────────────────────────────────────
+function onFreqModeChange() {
+  const mode = document.getElementById('freqMode').value;
+  document.getElementById('randomControls').className = 'sub-controls' + (mode === 'random' ? ' visible' : '');
+  document.getElementById('presetControls').className = 'sub-controls' + (mode === 'preset' ? ' visible' : '');
+  document.getElementById('vagalControls').className = 'sub-controls' + (mode === 'vagal' ? ' visible' : '');
+}
+
+function updateRangeLabel(inputId, labelId) {
+  const val = document.getElementById(inputId).value;
+  const el = document.getElementById(labelId);
+  if (labelId.includes('Spread')) {
+    el.textContent = '+/- ' + val;
+  } else {
+    el.textContent = val + ' Hz';
+  }
+}
+
+// ─── Preset chips ─────────────────────────────────────────────────────────────
+function initPresetChips() {
+  const container = document.getElementById('presetChips');
+  const allFreqs = [500, 800, 1000, 1200, 1500, 1800, 2000, 2500, 3000, 3500];
+  allFreqs.forEach(f => {
+    const chip = document.createElement('span');
+    chip.className = 'preset-chip' + (DEFAULT_PRESETS.includes(f) ? ' active' : '');
+    chip.textContent = f + 'Hz';
+    chip.onclick = () => {
+      chip.classList.toggle('active');
+      activePresets = allFreqs.filter((freq, i) =>
+        container.children[i].classList.contains('active')
+      );
+    };
+    container.appendChild(chip);
+  });
 }
 
 // ─── LED animation ────────────────────────────────────────────────────────────
@@ -368,33 +603,23 @@ function animateLEDs(totalMs) {
   const chaseMs = 600;
   const stepMs = chaseMs / 8;
 
-  // Chase: light each LED in sequence
   leds.forEach((led, i) => {
-    setTimeout(() => {
-      led.classList.remove('pulse');
-      led.classList.add('active');
-    }, i * stepMs);
-    setTimeout(() => {
-      led.classList.remove('active');
-    }, i * stepMs + stepMs);
+    setTimeout(() => { led.classList.remove('pulse'); led.classList.add('active'); }, i * stepMs);
+    setTimeout(() => { led.classList.remove('active'); }, i * stepMs + stepMs);
   });
 
-  // After chase: pulse all together twice
   const pulseStart = chaseMs + 50;
   [0, 300].forEach(offset => {
     setTimeout(() => {
       leds.forEach(led => {
         led.classList.remove('pulse', 'active');
-        void led.offsetWidth; // reflow to restart animation
+        void led.offsetWidth;
         led.classList.add('pulse');
       });
     }, pulseStart + offset);
   });
 
-  // Clean up
-  setTimeout(() => {
-    leds.forEach(led => led.classList.remove('active', 'pulse'));
-  }, totalMs);
+  setTimeout(() => { leds.forEach(led => led.classList.remove('active', 'pulse')); }, totalMs);
 }
 
 // ─── Battery ──────────────────────────────────────────────────────────────────
@@ -409,25 +634,25 @@ function updateBattery() {
 }
 
 // ─── Status helpers ───────────────────────────────────────────────────────────
-function setStatus(s40, s2k, fade, dur) {
+function setStatus(s40, s2k, freq, fade, dur) {
   document.getElementById('s40').textContent = s40;
   document.getElementById('s2k').textContent = s2k;
+  document.getElementById('sFreq').textContent = freq;
   document.getElementById('sFade').textContent = fade;
   document.getElementById('sDur').textContent = dur;
 }
 
-// ─── FFT draw loop ────────────────────────────────────────────────────────────
+// ─── FFT draw loop (dynamic frequency marker) ────────────────────────────────
 function drawFFT() {
   const canvas = document.getElementById('fft');
   const ctx = canvas.getContext('2d');
   const W = canvas.width;
   const H = canvas.height;
 
-  const bufLen = analyser.frequencyBinCount; // 1024
+  const bufLen = analyser.frequencyBinCount;
   const data = new Uint8Array(bufLen);
-  const sampleRate = audioCtx.sampleRate; // typically 44100 or 48000
+  const sampleRate = audioCtx.sampleRate;
   const nyquist = sampleRate / 2;
-  // Show 0..4000 Hz only for clarity
   const maxFreq = 4000;
   const maxBin = Math.floor(maxFreq / nyquist * bufLen);
 
@@ -435,12 +660,11 @@ function drawFFT() {
     rafId = requestAnimationFrame(draw);
     analyser.getByteFrequencyData(data);
 
-    // Background
     const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     ctx.fillStyle = isDark ? '#252525' : '#F5F5F5';
     ctx.fillRect(0, 0, W, H);
 
-    // Grid lines at key frequencies
+    // Grid lines
     const gridFreqs = [40, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000];
     ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
     ctx.lineWidth = 1;
@@ -449,8 +673,9 @@ function drawFFT() {
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
     });
 
-    // Marker lines for 40Hz and 2000Hz
-    [[40, '#ea580c'], [2000, '#FFBF00']].forEach(([f, color]) => {
+    // Dynamic marker lines: 40Hz + current secondary frequency
+    const secFreq = currentSecondaryFreq;
+    [[40, '#ea580c'], [secFreq, '#FFBF00']].forEach(([f, color]) => {
       const x = Math.round(f / maxFreq * W);
       ctx.strokeStyle = color;
       ctx.lineWidth = 1;
@@ -459,35 +684,36 @@ function drawFFT() {
       ctx.setLineDash([]);
     });
 
-    // Bars
+    // Bars with dynamic colour highlighting
     const barW = W / maxBin;
     for (let i = 0; i < maxBin; i++) {
       const v = data[i] / 255;
       const bh = v * H;
       const freq = i / bufLen * nyquist;
-      // Colour: orange near 40Hz, amber near 2000Hz, grey otherwise
       let color;
       if (Math.abs(freq - 40) < 15) color = '#ea580c';
-      else if (Math.abs(freq - 2000) < 60) color = '#FFBF00';
+      else if (Math.abs(freq - secFreq) < 60) color = '#FFBF00';
       else color = isDark ? 'rgba(200,200,200,0.35)' : 'rgba(60,60,60,0.3)';
 
       ctx.fillStyle = color;
       ctx.fillRect(i * barW, H - bh, Math.max(barW - 0.5, 1), bh);
     }
 
-    // Frequency labels for key peaks
+    // Frequency labels
     ctx.font = '10px Courier New';
     ctx.fillStyle = '#ea580c';
-    const x40 = Math.round(40 / maxFreq * W) + 3;
-    ctx.fillText('40Hz', x40, 12);
+    ctx.fillText('40Hz', Math.round(40 / maxFreq * W) + 3, 12);
 
     ctx.fillStyle = '#FFBF00';
-    const x2k = Math.round(2000 / maxFreq * W) - 36;
-    ctx.fillText('2000Hz', x2k, 12);
+    const xSec = Math.round(secFreq / maxFreq * W);
+    ctx.fillText(Math.round(secFreq) + 'Hz', Math.max(3, xSec - 20), 12);
   }
 
   draw();
 }
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+initPresetChips();
 </script>
 </body>
 </html>

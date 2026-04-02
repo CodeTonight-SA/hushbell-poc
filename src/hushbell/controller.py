@@ -28,24 +28,31 @@ class HushBellController:
             self._leds.start()
 
     def ring(self, spectrum: bool = False) -> dict:
-        """Execute a full ring cycle. Returns status dict."""
+        """Execute a full ring cycle. Returns status dict including freq_hz."""
         if self.battery.is_empty:
             logger.warning("Battery empty -- ring suppressed")
             return {"ok": False, "reason": "battery_empty"}
 
         start = time.monotonic()
-        samples = generate_combined(self.config.audio)
+        samples, freq_used = generate_combined(self.config.audio)
         self._leds.ring()
         play_audio(samples, self.config.audio.sample_rate)
         if spectrum:
             from .spectrum import plot_spectrum
-            plot_spectrum(samples, self.config.audio.sample_rate)
+            plot_spectrum(samples, self.config.audio.sample_rate, marker_freq=freq_used)
         notify("HushBell", "Someone is at the door")
         self.battery.ring()
 
         elapsed_ms = (time.monotonic() - start) * 1000
         self._ring_history.append(elapsed_ms)
-        status = {"ok": True, "elapsed_ms": round(elapsed_ms, 1), "battery": self.battery.status()}
+        logger.info("Ring: %.1fHz (mode=%s) in %.1fms", freq_used, self.config.audio.frequency_mode.value, elapsed_ms)
+        status = {
+            "ok": True,
+            "elapsed_ms": round(elapsed_ms, 1),
+            "freq_hz": round(freq_used, 1),
+            "frequency_mode": self.config.audio.frequency_mode.value,
+            "battery": self.battery.status(),
+        }
         if self._mqtt:
             self._mqtt.publish_status(status)
             self._mqtt.publish_battery(self.battery.status())
