@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HushBell — Browser Demo</title>
+<style>
+  :root {
+    --bg: #EAEAEA;
+    --surface: #D8D8D8;
+    --border: #BDBDBD;
+    --text: #1A1A1A;
+    --text-muted: #666666;
+    --accent: #ea580c;
+    --amber: #FFBF00;
+    --amber-dim: #7A5800;
+    --canvas-bg: #F5F5F5;
+    --led-off: #C8A800;
+    --font-mono: 'Courier New', Courier, monospace;
+    --font-sys: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1e1e1e;
+      --surface: #2a2a2a;
+      --border: #3a3a3a;
+      --text: #EAEAEA;
+      --text-muted: #888888;
+      --canvas-bg: #252525;
+      --led-off: #4A3800;
+    }
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sys);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px;
+  }
+
+  header {
+    width: 100%;
+    max-width: 720px;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: 12px;
+    margin-bottom: 32px;
+  }
+
+  header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    line-height: 1;
+  }
+
+  header h1 span { color: var(--accent); }
+
+  .meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    letter-spacing: 0.04em;
+  }
+
+  .main {
+    width: 100%;
+    max-width: 720px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 20px;
+  }
+
+  .card-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+  }
+
+  /* LED strip */
+  .led-strip {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 0;
+  }
+
+  .led {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--led-off);
+    transition: background 0.05s;
+  }
+
+  .led.active {
+    background: var(--amber);
+    box-shadow: 0 0 10px var(--amber), 0 0 20px rgba(255,191,0,0.4);
+  }
+
+  .led.pulse {
+    animation: pulse 0.4s ease-out forwards;
+  }
+
+  @keyframes pulse {
+    0%   { background: var(--amber); box-shadow: 0 0 14px var(--amber), 0 0 28px rgba(255,191,0,0.5); }
+    100% { background: var(--led-off); box-shadow: none; }
+  }
+
+  /* Ring button */
+  .ring-btn {
+    width: 100%;
+    padding: 18px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    font-family: var(--font-mono);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity 0.1s;
+  }
+
+  .ring-btn:active { opacity: 0.85; }
+  .ring-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Battery */
+  .battery-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .battery-bar-wrap {
+    flex: 1;
+    height: 14px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    position: relative;
+  }
+
+  .battery-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.3s ease;
+  }
+
+  .battery-info {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    min-width: 120px;
+    text-align: right;
+  }
+
+  /* FFT canvas */
+  canvas#fft {
+    width: 100%;
+    height: 120px;
+    background: var(--canvas-bg);
+    border: 1px solid var(--border);
+    display: block;
+  }
+
+  .freq-markers {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 4px;
+    padding: 0 2px;
+  }
+
+  /* Status */
+  .status-row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+
+  .stat {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .stat strong {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  footer {
+    margin-top: 40px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.06em;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Hush<span>Bell</span></h1>
+  <div class="meta">BROWSER DEMO &nbsp;|&nbsp; WEB AUDIO API &nbsp;|&nbsp; NO DEPENDENCIES</div>
+</header>
+
+<main class="main">
+
+  <!-- LED Strip -->
+  <div class="card">
+    <div class="card-label">LED Strip — 8 Amber Indicators</div>
+    <div class="led-strip" id="ledStrip">
+      <div class="led" id="led0"></div>
+      <div class="led" id="led1"></div>
+      <div class="led" id="led2"></div>
+      <div class="led" id="led3"></div>
+      <div class="led" id="led4"></div>
+      <div class="led" id="led5"></div>
+      <div class="led" id="led6"></div>
+      <div class="led" id="led7"></div>
+    </div>
+  </div>
+
+  <!-- Ring Button -->
+  <button class="ring-btn" id="ringBtn" onclick="handleRing()">
+    ▶ Ring HushBell
+  </button>
+
+  <!-- Battery -->
+  <div class="card">
+    <div class="card-label">Battery Simulation</div>
+    <div class="battery-row">
+      <div class="battery-bar-wrap">
+        <div class="battery-bar-fill" id="battFill" style="width:100%"></div>
+      </div>
+      <div class="battery-info" id="battInfo">1200 / 1200 rings</div>
+    </div>
+  </div>
+
+  <!-- FFT Analyser -->
+  <div class="card">
+    <div class="card-label">Real-Time FFT Spectrum — Proving 40Hz + 2000Hz</div>
+    <canvas id="fft" width="688" height="120"></canvas>
+    <div class="freq-markers">
+      <span>0 Hz</span>
+      <span>500</span>
+      <span>1000</span>
+      <span>1500</span>
+      <span>2000</span>
+      <span>2500</span>
+      <span>3000</span>
+      <span>3500</span>
+      <span>4000+ Hz</span>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="card">
+    <div class="card-label">Signal Status</div>
+    <div class="status-row">
+      <div class="stat">40Hz sine &nbsp;<strong id="s40">IDLE</strong></div>
+      <div class="stat">2000Hz sine &nbsp;<strong id="s2k">IDLE</strong></div>
+      <div class="stat">Fade-in &nbsp;<strong id="sFade">—</strong></div>
+      <div class="stat">Duration &nbsp;<strong id="sDur">—</strong></div>
+    </div>
+  </div>
+
+</main>
+
+<footer>HUSHBELL POC &nbsp;·&nbsp; 40Hz BELOW 67Hz DOG HEARING FLOOR &nbsp;·&nbsp; 2000Hz ANTI-STARTLE FADE</footer>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+const MAX_RINGS = 1200;
+let ringsLeft = MAX_RINGS;
+let audioCtx = null;
+let analyser = null;
+let rafId = null;
+let isRinging = false;
+
+// ─── Audio setup (lazy init to satisfy autoplay policy) ──────────────────────
+function initAudio() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 2048;
+  analyser.smoothingTimeConstant = 0.75;
+  analyser.connect(audioCtx.destination);
+  drawFFT();
+}
+
+// ─── Ring handler ─────────────────────────────────────────────────────────────
+function handleRing() {
+  if (isRinging || ringsLeft <= 0) return;
+  initAudio();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  ringsLeft--;
+  updateBattery();
+  isRinging = true;
+
+  const now = audioCtx.currentTime;
+  const duration = 1.5; // seconds
+
+  // 40Hz — flat, no fade (sub-threshold dog hearing)
+  const osc40 = audioCtx.createOscillator();
+  const gain40 = audioCtx.createGain();
+  osc40.type = 'sine';
+  osc40.frequency.value = 40;
+  gain40.gain.setValueAtTime(0.6, now);
+  osc40.connect(gain40);
+  gain40.connect(analyser);
+  osc40.start(now);
+  osc40.stop(now + duration);
+
+  // 2000Hz — 500ms linear fade-in (anti-startle)
+  const osc2k = audioCtx.createOscillator();
+  const gain2k = audioCtx.createGain();
+  osc2k.type = 'sine';
+  osc2k.frequency.value = 2000;
+  gain2k.gain.setValueAtTime(0, now);
+  gain2k.gain.linearRampToValueAtTime(0.4, now + 0.5);
+  gain2k.gain.setValueAtTime(0.4, now + duration - 0.1);
+  gain2k.gain.linearRampToValueAtTime(0, now + duration);
+  osc2k.connect(gain2k);
+  gain2k.connect(analyser);
+  osc2k.start(now);
+  osc2k.stop(now + duration);
+
+  // Update status UI
+  setStatus('ACTIVE', 'FADING IN', '500ms', duration + 's');
+
+  // Animate LEDs: chase then pulse
+  animateLEDs(duration * 1000);
+
+  // Reset after ring completes
+  setTimeout(() => {
+    isRinging = false;
+    setStatus('IDLE', 'IDLE', '—', '—');
+  }, duration * 1000);
+}
+
+// ─── LED animation ────────────────────────────────────────────────────────────
+function animateLEDs(totalMs) {
+  const leds = Array.from({ length: 8 }, (_, i) => document.getElementById('led' + i));
+  const chaseMs = 600;
+  const stepMs = chaseMs / 8;
+
+  // Chase: light each LED in sequence
+  leds.forEach((led, i) => {
+    setTimeout(() => {
+      led.classList.remove('pulse');
+      led.classList.add('active');
+    }, i * stepMs);
+    setTimeout(() => {
+      led.classList.remove('active');
+    }, i * stepMs + stepMs);
+  });
+
+  // After chase: pulse all together twice
+  const pulseStart = chaseMs + 50;
+  [0, 300].forEach(offset => {
+    setTimeout(() => {
+      leds.forEach(led => {
+        led.classList.remove('pulse', 'active');
+        void led.offsetWidth; // reflow to restart animation
+        led.classList.add('pulse');
+      });
+    }, pulseStart + offset);
+  });
+
+  // Clean up
+  setTimeout(() => {
+    leds.forEach(led => led.classList.remove('active', 'pulse'));
+  }, totalMs);
+}
+
+// ─── Battery ──────────────────────────────────────────────────────────────────
+function updateBattery() {
+  const pct = ringsLeft / MAX_RINGS;
+  document.getElementById('battFill').style.width = (pct * 100) + '%';
+  document.getElementById('battInfo').textContent = ringsLeft + ' / ' + MAX_RINGS + ' rings';
+  if (ringsLeft <= 0) {
+    document.getElementById('ringBtn').disabled = true;
+    document.getElementById('ringBtn').textContent = 'BATTERY EMPTY';
+  }
+}
+
+// ─── Status helpers ───────────────────────────────────────────────────────────
+function setStatus(s40, s2k, fade, dur) {
+  document.getElementById('s40').textContent = s40;
+  document.getElementById('s2k').textContent = s2k;
+  document.getElementById('sFade').textContent = fade;
+  document.getElementById('sDur').textContent = dur;
+}
+
+// ─── FFT draw loop ────────────────────────────────────────────────────────────
+function drawFFT() {
+  const canvas = document.getElementById('fft');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width;
+  const H = canvas.height;
+
+  const bufLen = analyser.frequencyBinCount; // 1024
+  const data = new Uint8Array(bufLen);
+  const sampleRate = audioCtx.sampleRate; // typically 44100 or 48000
+  const nyquist = sampleRate / 2;
+  // Show 0..4000 Hz only for clarity
+  const maxFreq = 4000;
+  const maxBin = Math.floor(maxFreq / nyquist * bufLen);
+
+  function draw() {
+    rafId = requestAnimationFrame(draw);
+    analyser.getByteFrequencyData(data);
+
+    // Background
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    ctx.fillStyle = isDark ? '#252525' : '#F5F5F5';
+    ctx.fillRect(0, 0, W, H);
+
+    // Grid lines at key frequencies
+    const gridFreqs = [40, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000];
+    ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+    ctx.lineWidth = 1;
+    gridFreqs.forEach(f => {
+      const x = Math.round(f / maxFreq * W);
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    });
+
+    // Marker lines for 40Hz and 2000Hz
+    [[40, '#ea580c'], [2000, '#FFBF00']].forEach(([f, color]) => {
+      const x = Math.round(f / maxFreq * W);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+      ctx.setLineDash([]);
+    });
+
+    // Bars
+    const barW = W / maxBin;
+    for (let i = 0; i < maxBin; i++) {
+      const v = data[i] / 255;
+      const bh = v * H;
+      const freq = i / bufLen * nyquist;
+      // Colour: orange near 40Hz, amber near 2000Hz, grey otherwise
+      let color;
+      if (Math.abs(freq - 40) < 15) color = '#ea580c';
+      else if (Math.abs(freq - 2000) < 60) color = '#FFBF00';
+      else color = isDark ? 'rgba(200,200,200,0.35)' : 'rgba(60,60,60,0.3)';
+
+      ctx.fillStyle = color;
+      ctx.fillRect(i * barW, H - bh, Math.max(barW - 0.5, 1), bh);
+    }
+
+    // Frequency labels for key peaks
+    ctx.font = '10px Courier New';
+    ctx.fillStyle = '#ea580c';
+    const x40 = Math.round(40 / maxFreq * W) + 3;
+    ctx.fillText('40Hz', x40, 12);
+
+    ctx.fillStyle = '#FFBF00';
+    const x2k = Math.round(2000 / maxFreq * W) - 36;
+    ctx.fillText('2000Hz', x2k, 12);
+  }
+
+  draw();
+}
+</script>
+</body>
+</html>
