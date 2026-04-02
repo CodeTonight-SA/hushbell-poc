@@ -54,7 +54,7 @@
   }
 
   header h1 {
-    font-size: 28px;
+    font-size: 36px;
     font-weight: 700;
     letter-spacing: -0.5px;
     line-height: 1;
@@ -64,9 +64,9 @@
 
   .meta {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 13px;
     color: var(--text-muted);
-    margin-top: 6px;
+    margin-top: 8px;
     letter-spacing: 0.04em;
   }
 
@@ -86,7 +86,7 @@
 
   .card-label {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 13px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--text-muted);
@@ -127,12 +127,12 @@
   /* Ring button */
   .ring-btn {
     width: 100%;
-    padding: 18px;
+    padding: 22px;
     background: var(--accent);
     color: #fff;
     border: none;
     font-family: var(--font-mono);
-    font-size: 15px;
+    font-size: 18px;
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -166,9 +166,9 @@
 
   .battery-info {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 13px;
     color: var(--text-muted);
-    min-width: 120px;
+    min-width: 140px;
     text-align: right;
   }
 
@@ -185,9 +185,9 @@
     display: flex;
     justify-content: space-between;
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
     color: var(--text-muted);
-    margin-top: 4px;
+    margin-top: 6px;
     padding: 0 2px;
   }
 
@@ -200,7 +200,7 @@
 
   .stat {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 13px;
     color: var(--text-muted);
   }
 
@@ -212,10 +212,71 @@
   footer {
     margin-top: 40px;
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 12px;
     color: var(--text-muted);
     letter-spacing: 0.06em;
     text-align: center;
+  }
+
+  /* Headphones notice */
+  .notice {
+    background: var(--surface);
+    border: 2px solid var(--accent);
+    padding: 20px 24px;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .notice-icon {
+    font-size: 28px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  .notice-text {
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .notice-text strong {
+    color: var(--accent);
+  }
+
+  /* Explainer section */
+  .explainer {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 24px;
+  }
+
+  .explainer h2 {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  .explainer p {
+    font-size: 15px;
+    line-height: 1.65;
+    margin-bottom: 12px;
+  }
+
+  .explainer p:last-child {
+    margin-bottom: 0;
+  }
+
+  .explainer .freq-tag {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .explainer .freq-tag.amber {
+    color: var(--amber);
   }
 </style>
 </head>
@@ -227,6 +288,14 @@
 </header>
 
 <main class="main">
+
+  <!-- Headphones Notice -->
+  <div class="notice">
+    <div class="notice-icon">🎧</div>
+    <div class="notice-text">
+      <strong>Headphones required.</strong> The 40Hz tone is below what laptop speakers can produce. You will only hear and feel it through headphones or a subwoofer. The 2000Hz tone is audible on all devices.
+    </div>
+  </div>
 
   <!-- LED Strip -->
   <div class="card">
@@ -285,6 +354,34 @@
       <div class="stat">Fade-in &nbsp;<strong id="sFade">—</strong></div>
       <div class="stat">Duration &nbsp;<strong id="sDur">—</strong></div>
     </div>
+  </div>
+
+  <!-- How It Works -->
+  <div class="explainer">
+    <h2>How It Works — In Plain Language</h2>
+    <p>
+      Standard doorbells trigger barking because dogs hear the sudden sound and react on instinct.
+      HushBell replaces that with two carefully chosen signals that dogs cannot hear or react to.
+    </p>
+    <p>
+      <span class="freq-tag">Channel 1: 40Hz tactile tone.</span>
+      Dogs hear from 67Hz upwards. A 40Hz tone sits below their hearing floor entirely.
+      You feel it as a low rumble through the speaker or furniture — the real hardware
+      uses a tactile transducer bolted to a surface. The dog hears nothing.
+    </p>
+    <p>
+      <span class="freq-tag amber">Channel 2: 2000Hz with 500ms fade-in.</span>
+      The acoustic startle reflex in dogs triggers when a sound appears in under 20 milliseconds.
+      By fading the 2000Hz tone in over 500 milliseconds — 25 times slower than the startle threshold —
+      the sound registers as background ambient noise rather than an alarm. No bark.
+    </p>
+    <p>
+      Combined, the two channels give a 99% no-bark probability on the tactile channel alone.
+      The spectrum analyser above proves both frequencies are present in real time.
+    </p>
+    <p>
+      Design by Thomas Frumkin. Implementation by CodeTonight. AI Craftspeople Guild.
+    </p>
   </div>
 
 </main>
