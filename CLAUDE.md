@@ -16,7 +16,48 @@ Thomas Frumkin's design from the AI Craftspeople Guild.
 - `src/hushbell/spectrum.py` -- Real-time FFT visualiser with dynamic markers
 - `src/hushbell/triggers/` -- Input sources (keyboard, MQTT, HTTP)
 - `tests/` -- Pytest suite with FFT verification (87 tests)
-- `web/` -- Browser demo (Web Audio API, frequency controls)
+- `web/` -- Browser demo (Web Audio API, frequency controls); `docs/index.html` is kept identical
+
+## Design System — Swiss Nihilism (ENTER Konsult)
+
+`web/index.html` and `docs/index.html` are **always identical**. Both follow Swiss Nihilism design language:
+
+- **No border-radius.** 0px on every element.
+- **No box-shadow.** Borders carry all depth signalling.
+- **Monospace hierarchy.** Labels: `'Courier New', monospace; font-size: 11-13px; text-transform: uppercase; letter-spacing: 0.08-0.12em`.
+- **System fonts for body.** `-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif`.
+- **Orange accent.** `#ea580c` (light/dark), `#996F00` (neutral). Never deviate.
+- **All colours via CSS custom properties.** `--bg`, `--surface`, `--border`, `--text`, `--text-muted`, `--accent`, `--amber`.
+
+### Themes
+
+| Theme | `--bg` | `--accent` |
+|-------|--------|-----------|
+| `light` | `#EAEAEA` | `#ea580c` |
+| `neutral` | `#F0EDE8` | `#996F00` |
+| `dark` | `#1e1e1e` | `#ea580c` |
+
+Theme stored in `localStorage`, auto-detected from `prefers-color-scheme` on first visit.
+
+### Emergent UI Pattern
+
+Cards hidden (`opacity:0; max-height:0`) until behaviour rules fire:
+
+| Card | Trigger |
+|------|---------|
+| Suggestion | 3 s idle, 0 rings |
+| Battery Projection | 3+ rings |
+| Frequency Education | Scroll to spectrum + 1+ ring |
+| Comparison | 5+ rings |
+
+Rules: `EMERGENT_RULES` array with `condition(ctx) / action(ctx)` pairs, evaluated on ring, scroll, and a 2 s interval.
+
+### Web Audio Patterns
+
+- Signal chain: `AudioContext → OscillatorNode → GainNode → AnalyserNode → destination`
+- FFT: `fftSize = 2048`, `smoothingTimeConstant = 0.75`, drawn at 60 fps via `requestAnimationFrame`
+- Frequency resolution mirrors `src/hushbell/config.py`: fixed / random / preset / vagal modes
+- Envelopes: linear, approximated-sine, approximated-exponential — all guarantee zero onset (anti-startle safety guarantee)
 
 ## Key Parameters
 
