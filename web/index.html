@@ -293,6 +293,14 @@
     color: var(--text-muted); letter-spacing: 0.06em;
   }
 
+  /* ─── HAL STATUS ──────────────────────────── */
+  .hal-status {
+    font-family: 'Courier New', monospace;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-muted); margin-top: 6px; transition: color 0.3s;
+  }
+  .hal-status.online { color: var(--accent); }
+
   /* ─── EMERGENT UI CARDS ────────────────────── */
   .emergent-card {
     background: var(--emergent-bg); border: 1px solid var(--emergent-border);
@@ -495,7 +503,10 @@
 
 </main>
 
-<footer>HUSHBELL POC &nbsp;&middot;&nbsp; 40Hz BELOW 67Hz DOG HEARING FLOOR &nbsp;&middot;&nbsp; ANTI-STARTLE FADE &nbsp;&middot;&nbsp; ANTI-CONDITIONING &nbsp;&middot;&nbsp; ENTER KONSULT</footer>
+<footer>
+  HUSHBELL POC &nbsp;&middot;&nbsp; 40Hz BELOW 67Hz DOG HEARING FLOOR &nbsp;&middot;&nbsp; ANTI-STARTLE FADE &nbsp;&middot;&nbsp; ANTI-CONDITIONING &nbsp;&middot;&nbsp; ENTER KONSULT
+  <div class="hal-status" id="hal-status">&#9675; HAL OFFLINE &mdash; heuristic rules active</div>
+</footer>
 
 <script>
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -886,7 +897,64 @@ const EMERGENT_RULES = [
   },
 ];
 
-function evaluateEmergentRules() {
+// ─── HAL — local Ollama endpoint ─────────────────────────────────────────────
+const HAL_BASE = 'http://localhost:11434';
+const HAL_MODEL = 'llama3.2:3b';
+let halOnline = false;
+
+function renderHALStatus() {
+  const el = document.getElementById('hal-status');
+  if (!el) return;
+  if (halOnline) {
+    el.textContent = '● HAL ONLINE — ' + HAL_MODEL;
+    el.classList.add('online');
+  } else {
+    el.textContent = '○ HAL OFFLINE — heuristic rules active';
+    el.classList.remove('online');
+  }
+}
+
+async function probeHAL() {
+  try {
+    const r = await fetch(HAL_BASE + '/', { signal: AbortSignal.timeout(1500) });
+    halOnline = r.status < 500;
+  } catch { halOnline = false; }
+  renderHALStatus();
+}
+
+async function halPredict(ctx) {
+  const shown = Object.keys(ctx).filter(k => k.endsWith('Shown') && ctx[k]).map(k => k.replace('Shown', ''));
+  const prompt =
+    `HushBell demo context: rings=${ctx.ringCount}, ` +
+    `idleSeconds=${Math.floor((Date.now() - ctx.lastRingTime) / 1000)}, ` +
+    `scrolledToSpectrum=${ctx.scrolledToSpectrum}, alreadyShown=[${shown.join(',')}]. ` +
+    `Which emergent card should appear next to guide the user? ` +
+    `Reply with exactly one word: suggestion, projection, education, comparison, or none.`;
+  try {
+    const r = await fetch(HAL_BASE + '/api/generate', {
+      method: 'POST',
+      signal: AbortSignal.timeout(4000),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: HAL_MODEL, prompt, stream: false })
+    });
+    const ans = ((await r.json()).response || '').toLowerCase();
+    if (ans.includes('suggestion')) return 'ec-suggestion';
+    if (ans.includes('projection')) return 'ec-projection';
+    if (ans.includes('education')) return 'ec-education';
+    if (ans.includes('comparison')) return 'ec-comparison';
+    return null;
+  } catch { halOnline = false; renderHALStatus(); return null; }
+}
+
+async function evaluateEmergentRules() {
+  if (halOnline) {
+    const cardId = await halPredict(behaviourCtx);
+    if (cardId) {
+      const rule = EMERGENT_RULES.find(r => r.id === cardId);
+      if (rule && rule.condition(behaviourCtx)) { rule.action(behaviourCtx); return; }
+    }
+  }
+  // Heuristic fallback — always runs when HAL is offline or predicted nothing actionable
   EMERGENT_RULES.forEach(rule => {
     if (rule.condition(behaviourCtx)) rule.action(behaviourCtx);
   });
@@ -938,6 +1006,8 @@ async function shareHushBell() {
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 initPresetChips();
+probeHAL();
+setInterval(probeHAL, 30000);
 </script>
 </body>
 </html>
