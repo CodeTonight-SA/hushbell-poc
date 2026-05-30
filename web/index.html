@@ -65,11 +65,14 @@
     background: var(--bg);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-    min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 32px 16px;
+    padding-top: max(32px, env(safe-area-inset-top));
+    padding-right: max(16px, env(safe-area-inset-right));
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    padding-left: max(16px, env(safe-area-inset-left));
     transition: background 0.3s, color 0.3s;
   }
 
@@ -82,6 +85,12 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  @media (max-width: 480px) {
+    header { flex-direction: column; align-items: flex-start; gap: 10px; }
   }
 
   header h1 {
@@ -121,6 +130,7 @@
     text-transform: uppercase;
     cursor: pointer;
     transition: background 0.15s, color 0.15s;
+    touch-action: manipulation;
   }
 
   .theme-switcher button:last-child { border-right: none; }
@@ -173,6 +183,7 @@
     font-size: 18px; font-weight: 700;
     letter-spacing: 0.1em; text-transform: uppercase;
     cursor: pointer; transition: opacity 0.1s, background 0.3s;
+    touch-action: manipulation;
   }
   .ring-btn:active { opacity: 0.85; }
   .ring-btn:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -728,8 +739,6 @@ function setStatus(s40, s2k, freq, fade, dur) {
 function drawFFT() {
   const canvas = document.getElementById('fft');
   const ctx = canvas.getContext('2d');
-  const W = canvas.width;
-  const H = canvas.height;
   const bufLen = analyser.frequencyBinCount;
   const data = new Uint8Array(bufLen);
   const sampleRate = audioCtx.sampleRate;
@@ -737,9 +746,16 @@ function drawFFT() {
   const maxFreq = 4000;
   const maxBin = Math.floor(maxFreq / nyquist * bufLen);
 
+  new ResizeObserver(() => {
+    if (canvas.clientWidth > 0) canvas.width = canvas.clientWidth;
+  }).observe(canvas);
+  if (canvas.clientWidth > 0) canvas.width = canvas.clientWidth;
+
   function draw() {
     rafId = requestAnimationFrame(draw);
     analyser.getByteFrequencyData(data);
+    const W = canvas.width;
+    const H = canvas.height;
 
     const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--canvas-bg').trim();
     ctx.fillStyle = bgColor;
