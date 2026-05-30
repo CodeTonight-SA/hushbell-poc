@@ -3,7 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HushBell — Browser Demo</title>
+<title>HushBell — Dog-Friendly Smart Doorbell Demo</title>
+<meta name="description" content="A doorbell that plays below the 67Hz dog hearing floor. 40Hz tactile + variable-frequency anti-conditioning. No barking.">
+<meta property="og:title" content="HushBell — Dog-Friendly Smart Doorbell">
+<meta property="og:description" content="A doorbell that plays below the 67Hz dog hearing floor. 40Hz tactile tone + anti-conditioning frequency variation. Try the live browser demo.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://codetonight-sa.github.io/hushbell-poc/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="HushBell — Dog-Friendly Smart Doorbell">
+<meta name="twitter:description" content="40Hz below dog hearing + anti-startle fade. Browser demo — no install.">
 <style>
   /* ============================================
      SWISS NIHILISM DESIGN SYSTEM — 3 THEMES
@@ -266,6 +274,25 @@
     font-size: 12px; color: var(--text-muted); letter-spacing: 0.06em; text-align: center;
   }
 
+  /* ─── SHARE BAR ───────────────────────────── */
+  .share-bar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .share-btn {
+    padding: 8px 16px;
+    background: transparent; color: var(--accent);
+    border: 1px solid var(--accent);
+    font-family: 'Courier New', monospace;
+    font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    cursor: pointer; transition: background 0.1s, color 0.1s;
+    touch-action: manipulation;
+  }
+  .share-btn:hover { background: var(--accent); color: #fff; }
+  .share-status {
+    font-family: 'Courier New', monospace; font-size: 11px;
+    color: var(--text-muted); letter-spacing: 0.06em;
+  }
+
   /* ─── EMERGENT UI CARDS ────────────────────── */
   .emergent-card {
     background: var(--emergent-bg); border: 1px solid var(--emergent-border);
@@ -307,6 +334,12 @@
     <div class="notice-text">
       <strong>Headphones required.</strong> The 40Hz tone is below what laptop speakers can produce. You will only hear and feel it through headphones or a subwoofer.
     </div>
+  </div>
+
+  <!-- Share -->
+  <div class="share-bar">
+    <button class="share-btn" id="shareBtn" onclick="shareHushBell()">&#x2197; Share this demo</button>
+    <span class="share-status" id="shareStatus"></span>
   </div>
 
   <!-- Emergent: Suggestion -->
@@ -870,6 +903,38 @@ const spectrumObserver = new IntersectionObserver(entries => {
 spectrumObserver.observe(document.getElementById('fft'));
 
 setInterval(evaluateEmergentRules, 2000);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SHARE — Web Share API with clipboard fallback
+// ═══════════════════════════════════════════════════════════════════════════════
+async function shareHushBell() {
+  const url = window.location.href;
+  const title = 'HushBell — Dog-Friendly Smart Doorbell';
+  const text = 'A doorbell that plays below the 67Hz dog hearing floor. No barking. Try the live demo.';
+  const status = document.getElementById('shareStatus');
+
+  if (navigator.share) {
+    try {
+      await navigator.share({ title, text, url });
+      status.textContent = 'SHARED ✓';
+    } catch (e) {
+      if (e.name !== 'AbortError') status.textContent = 'SHARE FAILED';
+    }
+  } else {
+    try {
+      await navigator.clipboard.writeText(url);
+      status.textContent = 'URL COPIED';
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = url; ta.style.cssText = 'position:fixed;top:-9999px';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); status.textContent = 'URL COPIED'; }
+      catch { status.textContent = url; }
+      document.body.removeChild(ta);
+    }
+  }
+  setTimeout(() => { status.textContent = ''; }, 3000);
+}
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 initPresetChips();
