@@ -60,6 +60,9 @@
     --border: #3a3a3a;
     --text: #EAEAEA;
     --text-muted: #888888;
+    --accent: #ea580c;
+    --amber: #FFBF00;
+    --amber-dim: #7A5800;
     --canvas-bg: #252525;
     --led-off: #4A3800;
     --emergent-bg: #222222;
@@ -318,6 +321,57 @@
   .emergent-card.projection .ec-label { color: var(--amber); }
   .emergent-card.education { border-left-color: #0891b2; }
   .emergent-card.education .ec-label { color: #0891b2; }
+
+  /* ─── MQTT BRIDGE ─────────────────────────── */
+  .mqtt-topics {
+    font-family: 'Courier New', monospace; font-size: 11px;
+    color: var(--text-muted); letter-spacing: 0.04em; margin-bottom: 12px;
+  }
+  .mqtt-row {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;
+  }
+  .mqtt-row label {
+    font-family: 'Courier New', monospace; font-size: 13px;
+    color: var(--text-muted); min-width: 52px; flex-shrink: 0;
+  }
+  .mqtt-row input[type="text"] {
+    flex: 1; min-width: 160px;
+    font-family: 'Courier New', monospace; font-size: 12px;
+    background: var(--bg); color: var(--text);
+    border: 1px solid var(--border); padding: 5px 8px;
+  }
+  .mqtt-conn-btn {
+    padding: 6px 16px; flex-shrink: 0;
+    background: transparent; color: var(--accent);
+    border: 1px solid var(--accent);
+    font-family: 'Courier New', monospace;
+    font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+    cursor: pointer; transition: background 0.1s, color 0.1s;
+    white-space: nowrap; touch-action: manipulation;
+  }
+  .mqtt-conn-btn:hover, .mqtt-conn-btn.live { background: var(--accent); color: #fff; }
+  .mqtt-conn-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .mqtt-indicator {
+    font-family: 'Courier New', monospace; font-size: 11px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 4px;
+  }
+  .mqtt-indicator.live { color: var(--accent); }
+  .mqtt-indicator.err { color: #dc2626; }
+  .mqtt-feed {
+    border-top: 1px solid var(--border); padding-top: 12px;
+    margin-top: 8px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .mqtt-feed-row { display: flex; gap: 12px; align-items: baseline; }
+  .mqtt-feed-lbl {
+    font-family: 'Courier New', monospace; font-size: 11px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-muted); flex-shrink: 0; min-width: 120px;
+  }
+  .mqtt-feed-val {
+    font-family: 'Courier New', monospace; font-size: 13px;
+    color: var(--accent); word-break: break-all;
+  }
 </style>
 </head>
 <body>
@@ -427,6 +481,36 @@
           <input type="range" id="vagalSpread" min="50" max="500" value="200" oninput="updateRangeLabel('vagalSpread','vagalSpreadVal')">
           <span class="range-val" id="vagalSpreadVal">+/- 200</span>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MQTT Hardware Bridge -->
+  <div class="card">
+    <div class="card-label">MQTT — Hardware Bridge (ESP32)</div>
+    <div class="mqtt-topics">PUB hushbell/ring &nbsp;·&nbsp; SUB hushbell/status &nbsp;·&nbsp; SUB hushbell/battery &nbsp;·&nbsp; SUB hushbell/config/state</div>
+    <div class="mqtt-row">
+      <label>Broker</label>
+      <input type="text" id="mqttBrokerUrl" value="wss://broker.hivemq.com:8884/mqtt" placeholder="wss://host:port/mqtt" spellcheck="false" autocomplete="off">
+      <button class="mqtt-conn-btn" id="mqttConnBtn" onclick="mqttToggle()">Connect</button>
+    </div>
+    <div class="mqtt-indicator" id="mqttIndicator">&#9675; DISCONNECTED</div>
+    <div class="mqtt-feed" id="mqttFeed" style="display:none">
+      <div class="mqtt-feed-row">
+        <span class="mqtt-feed-lbl">HW STATUS</span>
+        <span class="mqtt-feed-val" id="mqttHwStatus">—</span>
+      </div>
+      <div class="mqtt-feed-row">
+        <span class="mqtt-feed-lbl">HW BATTERY</span>
+        <span class="mqtt-feed-val" id="mqttHwBattery">—</span>
+      </div>
+      <div class="mqtt-feed-row">
+        <span class="mqtt-feed-lbl">LAST TOPIC</span>
+        <span class="mqtt-feed-val" id="mqttLastTopic">—</span>
+      </div>
+      <div class="mqtt-feed-row">
+        <span class="mqtt-feed-lbl">LAST MESSAGE</span>
+        <span class="mqtt-feed-val" id="mqttLastPayload">—</span>
       </div>
     </div>
   </div>
@@ -698,6 +782,15 @@ function handleRing() {
   }, duration * 1000);
 
   evaluateEmergentRules();
+
+  if (mqtt && mqtt.connected) {
+    mqtt.publish('hushbell/ring', {
+      source: 'web', ts: Date.now(),
+      frequency: Math.round(currentSecondaryFreq),
+      envelope: document.getElementById('envelopeType').value,
+      pleasant: document.getElementById('pleasantMode').value === 'on'
+    });
+  }
 }
 
 // ─── Frequency mode UI switching ──────────────────────────────────────────────
@@ -1002,6 +1095,187 @@ async function shareHushBell() {
     }
   }
   setTimeout(() => { status.textContent = ''; }, 3000);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MQTT 3.1.1 CLIENT — Pure WebSocket, zero external dependencies
+// Implements: CONNECT, CONNACK, PUBLISH (QoS 0), SUBSCRIBE, SUBACK, PINGREQ/RESP
+// Broker: wss://broker.hivemq.com:8884/mqtt (HiveMQ free public) by default
+// ═══════════════════════════════════════════════════════════════════════════════
+class MQTTClient {
+  constructor() {
+    this.ws = null;
+    this.connected = false;
+    this.clientId = 'hushbell-web-' + Math.random().toString(36).slice(2, 10);
+    this.pingTimer = null;
+    this.onMessage = null;
+    this.onDisconnect = null;
+  }
+
+  // MQTT variable-length remaining-length encoding
+  _remLen(n) {
+    const out = [];
+    do { let b = n & 0x7F; n >>>= 7; if (n) b |= 0x80; out.push(b); } while (n);
+    return out;
+  }
+
+  // MQTT UTF-8 string: 2-byte big-endian length prefix + UTF-8 bytes
+  _str(s) {
+    const b = new TextEncoder().encode(s);
+    return [b.length >> 8, b.length & 0xFF, ...b];
+  }
+
+  _buildConnect() {
+    const varHeader = [...this._str('MQTT'), 4, 0x02, 0x00, 60];
+    // Protocol: MQTT 3.1.1 | Flags: clean session | KeepAlive: 60s
+    const body = [...varHeader, ...this._str(this.clientId)];
+    return new Uint8Array([0x10, ...this._remLen(body.length), ...body]);
+  }
+
+  _buildPublish(topic, payload) {
+    const p = typeof payload === 'string' ? new TextEncoder().encode(payload) : payload;
+    const body = [...this._str(topic), ...p];
+    return new Uint8Array([0x30, ...this._remLen(body.length), ...body]);
+  }
+
+  _buildSubscribe(topics) {
+    let body = [0x00, 0x01]; // packet ID = 1
+    topics.forEach(t => { body = [...body, ...this._str(t), 0x00]; }); // QoS 0
+    return new Uint8Array([0x82, ...this._remLen(body.length), ...body]);
+  }
+
+  _buildPingReq() { return new Uint8Array([0xC0, 0x00]); }
+
+  _parse(ab) {
+    const b = new Uint8Array(ab);
+    const type = b[0] >> 4;
+    let pos = 1;
+    let remLen = 0, shift = 0;
+    while (pos < b.length) {
+      const byte = b[pos++]; remLen |= (byte & 0x7F) << shift; shift += 7;
+      if (!(byte & 0x80)) break;
+    }
+    if (type === 2)  return { type: 'CONNACK', code: b[pos + 1] };
+    if (type === 9)  return { type: 'SUBACK' };
+    if (type === 13) return { type: 'PINGRESP' };
+    if (type === 3) {
+      const tLen = (b[pos] << 8) | b[pos + 1]; pos += 2;
+      const topic = new TextDecoder().decode(b.slice(pos, pos + tLen)); pos += tLen;
+      const payload = new TextDecoder().decode(b.slice(pos));
+      return { type: 'PUBLISH', topic, payload };
+    }
+    return { type: 'UNKNOWN' };
+  }
+
+  connect(url) {
+    return new Promise((resolve, reject) => {
+      this.ws = new WebSocket(url, ['mqtt']);
+      this.ws.binaryType = 'arraybuffer';
+      const guard = setTimeout(() => reject(new Error('timeout')), 10000);
+      this.ws.onopen  = () => this.ws.send(this._buildConnect());
+      this.ws.onmessage = (e) => {
+        const pkt = this._parse(e.data);
+        if (pkt.type === 'CONNACK') {
+          clearTimeout(guard);
+          if (pkt.code === 0) {
+            this.connected = true;
+            this.pingTimer = setInterval(() => {
+              if (this.ws && this.ws.readyState === 1) this.ws.send(this._buildPingReq());
+            }, 30000);
+            resolve();
+          } else reject(new Error('CONNACK refused (code ' + pkt.code + ')'));
+        } else if (pkt.type === 'PUBLISH' && this.onMessage) {
+          this.onMessage(pkt.topic, pkt.payload);
+        }
+      };
+      this.ws.onerror = () => { clearTimeout(guard); reject(new Error('WebSocket error')); };
+      this.ws.onclose = () => {
+        this.connected = false;
+        clearInterval(this.pingTimer);
+        if (this.onDisconnect) this.onDisconnect();
+      };
+    });
+  }
+
+  publish(topic, payload) {
+    if (!this.connected || this.ws.readyState !== 1) return false;
+    this.ws.send(this._buildPublish(topic,
+      typeof payload === 'object' ? JSON.stringify(payload) : String(payload)));
+    return true;
+  }
+
+  subscribe(topics) {
+    if (this.connected && this.ws.readyState === 1) this.ws.send(this._buildSubscribe(topics));
+  }
+
+  disconnect() {
+    clearInterval(this.pingTimer);
+    if (this.ws) { this.ws.close(); this.ws = null; }
+    this.connected = false;
+  }
+}
+
+// ─── MQTT UI controller ────────────────────────────────────────────────────────
+let mqtt = null;
+
+function mqttSetStatus(state, text) {
+  const ind = document.getElementById('mqttIndicator');
+  const btn = document.getElementById('mqttConnBtn');
+  ind.className = 'mqtt-indicator' + (state === 'live' ? ' live' : state === 'err' ? ' err' : '');
+  ind.textContent = text;
+  btn.textContent = state === 'live' ? 'Disconnect' : 'Connect';
+  btn.className   = 'mqtt-conn-btn'  + (state === 'live' ? ' live' : '');
+  document.getElementById('mqttFeed').style.display = state === 'live' ? '' : 'none';
+}
+
+async function mqttToggle() {
+  if (mqtt && mqtt.connected) {
+    mqtt.disconnect(); mqtt = null;
+    mqttSetStatus('off', '○ DISCONNECTED');
+    return;
+  }
+  const url = document.getElementById('mqttBrokerUrl').value.trim();
+  if (!url) return;
+  mqttSetStatus('off', '… CONNECTING');
+  document.getElementById('mqttConnBtn').disabled = true;
+
+  mqtt = new MQTTClient();
+
+  mqtt.onDisconnect = () => {
+    mqttSetStatus('off', '○ DISCONNECTED');
+    document.getElementById('mqttConnBtn').disabled = false;
+  };
+
+  mqtt.onMessage = (topic, payload) => {
+    document.getElementById('mqttLastTopic').textContent = topic;
+    document.getElementById('mqttLastPayload').textContent = payload;
+    try {
+      const d = JSON.parse(payload);
+      if (topic === 'hushbell/status') {
+        document.getElementById('mqttHwStatus').textContent =
+          (d.state || '—').toUpperCase() + (d.frequency ? ' · ' + Math.round(d.frequency) + 'Hz' : '');
+      }
+      if (topic === 'hushbell/battery') {
+        const pct = d.rings_left != null && d.capacity
+          ? Math.round(d.rings_left / d.capacity * 100) + '%' : '';
+        document.getElementById('mqttHwBattery').textContent =
+          (d.rings_left != null ? d.rings_left + ' rings' : '—') + (pct ? ' (' + pct + ')' : '');
+      }
+    } catch {}
+  };
+
+  try {
+    await mqtt.connect(url);
+    mqtt.subscribe(['hushbell/status', 'hushbell/battery', 'hushbell/config/state']);
+    let host;
+    try { host = new URL(url).host; } catch { host = url; }
+    mqttSetStatus('live', '● CONNECTED — ' + host);
+    document.getElementById('mqttConnBtn').disabled = false;
+  } catch (err) {
+    mqttSetStatus('err', '✕ ERROR: ' + err.message);
+    document.getElementById('mqttConnBtn').disabled = false;
+    mqtt = null;
+  }
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
