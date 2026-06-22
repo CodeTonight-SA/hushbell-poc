@@ -372,6 +372,21 @@
     font-family: 'Courier New', monospace; font-size: 13px;
     color: var(--accent); word-break: break-all;
   }
+
+  /* ─── RING SIGIL ──────────────────────────── */
+  /* Deterministic ASCII fingerprint per ring — same payload, same sigil, byte-for-byte. */
+  .sigil-stack { display: flex; flex-direction: column; }
+  .sigil { padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .sigil:last-child { border-bottom: none; }
+  .sigil-art {
+    font-family: 'Courier New', monospace; font-size: 12px;
+    line-height: 1.05; color: var(--accent); white-space: pre; letter-spacing: 0.04em;
+  }
+  .sigil-cap {
+    font-family: 'Courier New', monospace; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-muted); margin-top: 4px;
+  }
 </style>
 </head>
 <body>
@@ -564,6 +579,12 @@
       <div class="stat">Fade-in &nbsp;<strong id="sFade">—</strong></div>
       <div class="stat">Duration &nbsp;<strong id="sDur">—</strong></div>
     </div>
+  </div>
+
+  <!-- Ring Sigil — deterministic fingerprint per ring -->
+  <div class="card">
+    <div class="card-label">Ring Sigil — Frequency Fingerprint</div>
+    <div class="sigil-stack" id="sigilStack"></div>
   </div>
 
   <!-- Emergent: Comparison -->
@@ -783,7 +804,7 @@ function handleRing() {
 
   evaluateEmergentRules();
 
-  if (mqtt && mqtt.connected) {
+  if (mqtt && mqtt.state === 'connected') {
     mqtt.publish('hushbell/ring', {
       source: 'web', ts: Date.now(),
       frequency: Math.round(currentSecondaryFreq),
@@ -791,6 +812,12 @@ function handleRing() {
       pleasant: document.getElementById('pleasantMode').value === 'on'
     });
   }
+
+  // Ring Sigil — deterministic ASCII fingerprint of THIS ring's tone (web origin).
+  // Seed from the SAME rounded freq that was published to MQTT (line above), so the
+  // web sigil and the hardware-echo sigil (rendered from the int the ESP32 received)
+  // are byte-identical on an honest round-trip — the feature's whole point.
+  renderSigil(Math.round(currentSecondaryFreq), envType, isPleasant, false);
 }
 
 // ─── Frequency mode UI switching ──────────────────────────────────────────────
@@ -1098,6 +1125,48 @@ async function shareHushBell() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// RING SIGIL — deterministic ASCII fingerprint per ring
+// Same payload (freq | envelope | pleasant) => same sigil AND same hash8 id, byte-for-byte.
+// Visually-distinct sigils ARE the evidence that random/vagal mode varies the tone;
+// two identical 'fixed' rings produce the IDENTICAL sigil, exposing that fixed does not vary.
+// ═══════════════════════════════════════════════════════════════════════════════
+function ringHash(s) {
+  let h = 2166136261 >>> 0;            // FNV-1a 32-bit
+  for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+
+function ringSigil(freq, env, pleasant) {
+  const seed = freq + '|' + env + '|' + (pleasant ? 'p' : '-');
+  let h = ringHash(seed);
+  const G = [' ', '.', ':', '-', '=', '#'];   // 6-level glyph ramp
+  const rows = [];
+  for (let r = 0; r < 5; r++) {
+    let line = '';
+    for (let c = 0; c < 11; c++) {
+      line += G[h % G.length];
+      h = (Math.imul(h, 1103515245) + 12345) >>> 0;   // LCG walk over the FNV seed
+    }
+    rows.push(line);
+  }
+  return { art: rows.join('\n'), id: ('0000000' + ringHash(seed).toString(16)).slice(-8) };
+}
+
+function renderSigil(freq, env, pleasant, hw) {
+  const { art, id } = ringSigil(freq, env, pleasant);
+  const box = document.getElementById('sigilStack');
+  if (!box) return;
+  const el = document.createElement('div');
+  el.className = 'sigil';
+  el.innerHTML = '<pre class="sigil-art"></pre><div class="sigil-cap"></div>';
+  el.querySelector('.sigil-art').textContent = art;
+  el.querySelector('.sigil-cap').textContent =
+    (hw ? '[HW] ' : '') + Math.round(freq) + 'Hz / ' + env + ' / ' + id;
+  box.prepend(el);
+  while (box.children.length > 3) box.removeChild(box.lastChild);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // MQTT 3.1.1 CLIENT — Pure WebSocket, zero external dependencies
 // Implements: CONNECT, CONNACK, PUBLISH (QoS 0), SUBSCRIBE, SUBACK, PINGREQ/RESP
 // Broker: wss://broker.hivemq.com:8884/mqtt (HiveMQ free public) by default
@@ -1105,11 +1174,25 @@ async function shareHushBell() {
 class MQTTClient {
   constructor() {
     this.ws = null;
-    this.connected = false;
+    this.state = 'disconnected';
     this.clientId = 'hushbell-web-' + Math.random().toString(36).slice(2, 10);
     this.pingTimer = null;
     this.onMessage = null;
-    this.onDisconnect = null;
+    this.onStateChange = null;
+  }
+
+  // State transitions funnel through one place so the UI has a single source of truth.
+  _setState(s) { this.state = s; if (this.onStateChange) this.onStateChange(s); }
+
+  // Detach every handler BEFORE dropping the socket so a dead socket can never fire
+  // a zombie onmessage/onclose into live UI on a connect->error->reconnect cycle.
+  _cleanup() {
+    if (this.pingTimer) { clearInterval(this.pingTimer); this.pingTimer = null; }
+    if (this.ws) {
+      this.ws.onopen = this.ws.onmessage = this.ws.onclose = this.ws.onerror = null;
+      if (this.ws.readyState < 2) { try { this.ws.close(); } catch {} }
+      this.ws = null;
+    }
   }
 
   // MQTT variable-length remaining-length encoding
@@ -1169,6 +1252,8 @@ class MQTTClient {
 
   connect(url) {
     return new Promise((resolve, reject) => {
+      this._cleanup();              // idempotent re-entry guard — never leak a prior socket
+      this._setState('connecting');
       this.ws = new WebSocket(url, ['mqtt']);
       this.ws.binaryType = 'arraybuffer';
       const guard = setTimeout(() => reject(new Error('timeout')), 10000);
@@ -1178,7 +1263,7 @@ class MQTTClient {
         if (pkt.type === 'CONNACK') {
           clearTimeout(guard);
           if (pkt.code === 0) {
-            this.connected = true;
+            this._setState('connected');
             this.pingTimer = setInterval(() => {
               if (this.ws && this.ws.readyState === 1) this.ws.send(this._buildPingReq());
             }, 30000);
@@ -1188,94 +1273,87 @@ class MQTTClient {
           this.onMessage(pkt.topic, pkt.payload);
         }
       };
-      this.ws.onerror = () => { clearTimeout(guard); reject(new Error('WebSocket error')); };
-      this.ws.onclose = () => {
-        this.connected = false;
-        clearInterval(this.pingTimer);
-        if (this.onDisconnect) this.onDisconnect();
-      };
+      this.ws.onerror = () => { clearTimeout(guard); this._cleanup(); this._setState('error'); reject(new Error('WebSocket error')); };
+      this.ws.onclose = () => { this._cleanup(); this._setState('disconnected'); };
     });
   }
 
   publish(topic, payload) {
-    if (!this.connected || this.ws.readyState !== 1) return false;
+    if (this.state !== 'connected' || this.ws.readyState !== 1) return false;
     this.ws.send(this._buildPublish(topic,
       typeof payload === 'object' ? JSON.stringify(payload) : String(payload)));
     return true;
   }
 
   subscribe(topics) {
-    if (this.connected && this.ws.readyState === 1) this.ws.send(this._buildSubscribe(topics));
+    if (this.state === 'connected' && this.ws.readyState === 1) this.ws.send(this._buildSubscribe(topics));
   }
 
   disconnect() {
-    clearInterval(this.pingTimer);
-    if (this.ws) { this.ws.close(); this.ws = null; }
-    this.connected = false;
+    this._cleanup();
+    this._setState('disconnected');
   }
 }
 
 // ─── MQTT UI controller ────────────────────────────────────────────────────────
-let mqtt = null;
+// One persistent client. The single onStateChange handler is the ONLY place that
+// touches the indicator / button / feed — no duplicated disabled/textContent juggling.
+const mqtt = new MQTTClient();
 
-function mqttSetStatus(state, text) {
+mqtt.onStateChange = state => {
   const ind = document.getElementById('mqttIndicator');
   const btn = document.getElementById('mqttConnBtn');
-  ind.className = 'mqtt-indicator' + (state === 'live' ? ' live' : state === 'err' ? ' err' : '');
-  ind.textContent = text;
-  btn.textContent = state === 'live' ? 'Disconnect' : 'Connect';
-  btn.className   = 'mqtt-conn-btn'  + (state === 'live' ? ' live' : '');
-  document.getElementById('mqttFeed').style.display = state === 'live' ? '' : 'none';
+  const cls = state === 'connected' ? ' live' : state === 'error' ? ' err' : '';
+  ind.className = 'mqtt-indicator' + cls;
+  ind.textContent = {
+    connected: '● CONNECTED — ' + _mqttBrokerHost(),
+    connecting: '… CONNECTING',
+    error: '✕ ERROR — check broker URL',
+    disconnected: '○ DISCONNECTED',
+  }[state];
+  btn.textContent = state === 'connected' ? 'Disconnect' : 'Connect';
+  btn.className = 'mqtt-conn-btn' + (state === 'connected' ? ' live' : '');
+  btn.disabled = state === 'connecting';
+  document.getElementById('mqttFeed').style.display = state === 'connected' ? '' : 'none';
+};
+
+mqtt.onMessage = (topic, payload) => {
+  document.getElementById('mqttLastTopic').textContent = topic;
+  document.getElementById('mqttLastPayload').textContent = payload;
+  try {
+    const d = JSON.parse(payload);
+    if (topic === 'hushbell/status') {
+      document.getElementById('mqttHwStatus').textContent =
+        (d.state || '—').toUpperCase() + (d.frequency ? ' · ' + Math.round(d.frequency) + 'Hz' : '');
+      // ESP32 echoing a ring back renders its OWN [HW] sigil — round-trip integrity proof.
+      const hwFreq = d.frequency != null ? d.frequency : d.freq;
+      if (hwFreq != null) renderSigil(hwFreq, d.envelope || '-', !!d.pleasant, true);
+    }
+    if (topic === 'hushbell/battery') {
+      const pct = d.rings_left != null && d.capacity
+        ? Math.round(d.rings_left / d.capacity * 100) + '%' : '';
+      document.getElementById('mqttHwBattery').textContent =
+        (d.rings_left != null ? d.rings_left + ' rings' : '—') + (pct ? ' (' + pct + ')' : '');
+    }
+  } catch {}
+};
+
+function _mqttBrokerHost() {
+  const url = document.getElementById('mqttBrokerUrl').value.trim();
+  try { return new URL(url).host; } catch { return url; }
 }
 
 async function mqttToggle() {
-  if (mqtt && mqtt.connected) {
-    mqtt.disconnect(); mqtt = null;
-    mqttSetStatus('off', '○ DISCONNECTED');
+  if (mqtt.state === 'connected' || mqtt.state === 'connecting') {
+    mqtt.disconnect();
     return;
   }
   const url = document.getElementById('mqttBrokerUrl').value.trim();
   if (!url) return;
-  mqttSetStatus('off', '… CONNECTING');
-  document.getElementById('mqttConnBtn').disabled = true;
-
-  mqtt = new MQTTClient();
-
-  mqtt.onDisconnect = () => {
-    mqttSetStatus('off', '○ DISCONNECTED');
-    document.getElementById('mqttConnBtn').disabled = false;
-  };
-
-  mqtt.onMessage = (topic, payload) => {
-    document.getElementById('mqttLastTopic').textContent = topic;
-    document.getElementById('mqttLastPayload').textContent = payload;
-    try {
-      const d = JSON.parse(payload);
-      if (topic === 'hushbell/status') {
-        document.getElementById('mqttHwStatus').textContent =
-          (d.state || '—').toUpperCase() + (d.frequency ? ' · ' + Math.round(d.frequency) + 'Hz' : '');
-      }
-      if (topic === 'hushbell/battery') {
-        const pct = d.rings_left != null && d.capacity
-          ? Math.round(d.rings_left / d.capacity * 100) + '%' : '';
-        document.getElementById('mqttHwBattery').textContent =
-          (d.rings_left != null ? d.rings_left + ' rings' : '—') + (pct ? ' (' + pct + ')' : '');
-      }
-    } catch {}
-  };
-
   try {
     await mqtt.connect(url);
     mqtt.subscribe(['hushbell/status', 'hushbell/battery', 'hushbell/config/state']);
-    let host;
-    try { host = new URL(url).host; } catch { host = url; }
-    mqttSetStatus('live', '● CONNECTED — ' + host);
-    document.getElementById('mqttConnBtn').disabled = false;
-  } catch (err) {
-    mqttSetStatus('err', '✕ ERROR: ' + err.message);
-    document.getElementById('mqttConnBtn').disabled = false;
-    mqtt = null;
-  }
+  } catch { /* onStateChange('error') already drove the UI */ }
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
