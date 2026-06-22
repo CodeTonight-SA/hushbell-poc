@@ -343,6 +343,21 @@
   }
   .mqtt-log div.out { color: var(--accent); }
   .mqtt-log div.err { color: #dc2626; }
+
+  /* ─── RING SIGIL ──────────────────────────── */
+  /* Deterministic ASCII fingerprint per ring — same payload, same sigil, byte-for-byte. */
+  .sigil-stack { display: flex; flex-direction: column; }
+  .sigil { padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .sigil:last-child { border-bottom: none; }
+  .sigil-art {
+    font-family: 'Courier New', monospace; font-size: 12px;
+    line-height: 1.05; color: var(--accent); white-space: pre; letter-spacing: 0.04em;
+  }
+  .sigil-cap {
+    font-family: 'Courier New', monospace; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-muted); margin-top: 4px;
+  }
 </style>
 </head>
 <body>
@@ -485,9 +500,10 @@
     </div>
     <div class="status-row">
       <div class="stat">Status&nbsp;<strong class="mqtt-state offline" id="mqttState">OFFLINE</strong></div>
-      <div class="stat">ESP32&nbsp;<strong id="mqttEspStatus">—</strong></div>
-      <div class="stat">HW Battery&nbsp;<strong id="mqttHwBatt">—</strong></div>
+      <div class="stat">ESP32-WROOM-32E&nbsp;<strong id="mqttEspStatus">—</strong></div>
+      <div class="stat">Dayton TT25-8 Battery&nbsp;<strong id="mqttHwBatt">—</strong></div>
       <div class="stat">Last Ring&nbsp;<strong id="mqttLastRing">—</strong></div>
+      <div class="stat">Reconnects&nbsp;<strong id="mqttReconnects">0</strong></div>
     </div>
     <div class="mqtt-log" id="mqttLog" style="display:none"></div>
   </div>
@@ -521,6 +537,12 @@
       <div class="stat">Fade-in &nbsp;<strong id="sFade">—</strong></div>
       <div class="stat">Duration &nbsp;<strong id="sDur">—</strong></div>
     </div>
+  </div>
+
+  <!-- Ring Sigil — deterministic fingerprint per ring -->
+  <div class="card">
+    <div class="card-label">Ring Sigil — Frequency Fingerprint</div>
+    <div class="sigil-stack" id="sigilStack"></div>
   </div>
 
   <!-- Emergent: Comparison -->
@@ -741,6 +763,9 @@ function handleRing() {
   }, duration * 1000);
 
   evaluateEmergentRules();
+
+  // Ring Sigil \u2014 deterministic ASCII fingerprint of THIS ring's tone (web origin).
+  renderSigil(currentSecondaryFreq, envType, isPleasant, false);
 }
 
 // ─── Frequency mode UI switching ──────────────────────────────────────────────
@@ -1047,6 +1072,48 @@ async function shareHushBell() {
   setTimeout(() => { status.textContent = ''; }, 3000);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// RING SIGIL — deterministic ASCII fingerprint per ring
+// Same payload (freq | envelope | pleasant) => same sigil AND same hash8 id, byte-for-byte.
+// Visually-distinct sigils ARE the evidence that random/vagal mode varies the tone;
+// two identical 'fixed' rings produce the IDENTICAL sigil, exposing that fixed does not vary.
+// ═══════════════════════════════════════════════════════════════════════════════
+function ringHash(s) {
+  let h = 2166136261 >>> 0;            // FNV-1a 32-bit
+  for (const c of s) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+
+function ringSigil(freq, env, pleasant) {
+  const seed = freq + '|' + env + '|' + (pleasant ? 'p' : '-');
+  let h = ringHash(seed);
+  const G = [' ', '.', ':', '-', '=', '#'];   // 6-level glyph ramp
+  const rows = [];
+  for (let r = 0; r < 5; r++) {
+    let line = '';
+    for (let c = 0; c < 11; c++) {
+      line += G[h % G.length];
+      h = (Math.imul(h, 1103515245) + 12345) >>> 0;   // LCG walk over the FNV seed
+    }
+    rows.push(line);
+  }
+  return { art: rows.join('\n'), id: ('0000000' + ringHash(seed).toString(16)).slice(-8) };
+}
+
+function renderSigil(freq, env, pleasant, hw) {
+  const { art, id } = ringSigil(freq, env, pleasant);
+  const box = document.getElementById('sigilStack');
+  if (!box) return;
+  const el = document.createElement('div');
+  el.className = 'sigil';
+  el.innerHTML = '<pre class="sigil-art"></pre><div class="sigil-cap"></div>';
+  el.querySelector('.sigil-art').textContent = art;
+  el.querySelector('.sigil-cap').textContent =
+    (hw ? '[HW] ' : '') + Math.round(freq) + 'Hz / ' + env + ' / ' + id;
+  box.prepend(el);
+  while (box.children.length > 3) box.removeChild(box.lastChild);
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 initPresetChips();
 probeHAL();
@@ -1057,18 +1124,45 @@ setInterval(probeHAL, 30000);
 // Minimal MQTT 3.1.1 over WebSocket — no external dependencies.
 // Binary protocol hand-rolled: CONNECT, PUBLISH (QoS 0), SUBSCRIBE, PINGREQ.
 // ═══════════════════════════════════════════════════════════════════════════════
+
+// Single source of truth for topic strings — shared by SUB, PUB, and inbound
+// dispatch. Mirrors src/hushbell/mqtt_bridge.py so a web<->firmware topic drift
+// is a one-line edit here, never a silent typo scattered across the class.
+const TOPICS = {
+  RING:         'hushbell/ring',
+  STATUS:       'hushbell/status',
+  BATTERY:      'hushbell/battery',
+  CONFIG_STATE: 'hushbell/config/state',
+};
+
 class MqttClient {
   constructor() {
     this._ws = null;
     this.state = 'disconnected';
     this.onMessage = null;
     this.onStateChange = null;
+    this.onReconnect = null;         // fired on each retry so the UI counter can update
     this._pingTimer = null;
     this._pid = 1;
     this._clientId = 'hb-web-' + Math.random().toString(36).slice(2, 10);
+    // Auto-reconnect state — survives a flaky-wifi / ESP32-brownout packet drop.
+    this._wantConnected = false;     // true between connect() and disconnect()
+    this._lastUrl = null;
+    this._reconnectAttempt = 0;
+    this._reconnectTimer = null;
+    this.reconnects = 0;             // visible RECONNECTS counter
   }
 
+  // Public entry: user intent to connect. Resets the backoff and arms auto-reconnect.
   connect(url) {
+    this._lastUrl = url;
+    this._wantConnected = true;
+    this._reconnectAttempt = 0;
+    this._open(url);
+  }
+
+  // Shared socket-creation used by connect() AND _reconnect() (no counter reset here).
+  _open(url) {
     this._cleanup();
     this._setState('connecting');
     try {
@@ -1076,12 +1170,39 @@ class MqttClient {
       this._ws.binaryType = 'arraybuffer';
       this._ws.onopen = () => this._sendConnect();
       this._ws.onmessage = e => this._parse(new Uint8Array(e.data));
-      this._ws.onclose = () => { this._cleanup(); this._setState('disconnected'); };
-      this._ws.onerror = () => { this._cleanup(); this._setState('error'); };
-    } catch { this._setState('error'); }
+      this._ws.onclose = () => { this._cleanup(); this._onDrop('disconnected'); };
+      this._ws.onerror = () => { this._cleanup(); this._onDrop('error'); };
+    } catch { this._onDrop('error'); }
+  }
+
+  // A drop while the user still wants to be connected schedules a bounded retry;
+  // an intentional disconnect (or cap reached) surfaces the terminal state.
+  _onDrop(terminalState) {
+    if (this._wantConnected) { this._reconnect(); return; }
+    this._setState(terminalState);
+  }
+
+  _reconnect() {
+    if (this._reconnectTimer) return;            // a retry is already scheduled
+    if (this._reconnectAttempt >= 5) {           // cap — give up after 5 tries
+      this._wantConnected = false;
+      this._setState('error');
+      return;
+    }
+    const delay = Math.min(1000 * 2 ** this._reconnectAttempt, 16000);
+    this._reconnectAttempt++;
+    this.reconnects++;
+    if (this.onReconnect) this.onReconnect(this.reconnects);
+    this._setState('connecting');                // keep the state machine honest
+    this._reconnectTimer = setTimeout(() => {
+      this._reconnectTimer = null;
+      if (this._wantConnected && this._lastUrl) this._open(this._lastUrl);
+    }, delay);
   }
 
   disconnect() {
+    this._wantConnected = false;                 // stop any pending/future retry
+    if (this._reconnectTimer) { clearTimeout(this._reconnectTimer); this._reconnectTimer = null; }
     if (this._ws && this._ws.readyState === WebSocket.OPEN) {
       try { this._ws.send(new Uint8Array([0xE0, 0x00])); } catch {}
     }
@@ -1147,15 +1268,16 @@ class MqttClient {
     const type = (bytes[0] >> 4) & 0x0F;
     if (type === 2) { // CONNACK
       if (bytes[3] === 0) {
+        this._reconnectAttempt = 0;             // a good connect clears the backoff
         this._setState('connected');
         this._pingTimer = setInterval(() => {
           if (this._ws && this._ws.readyState === WebSocket.OPEN) {
             this._ws.send(new Uint8Array([0xC0, 0x00])); // PINGREQ
           }
         }, 25000);
-        ['hushbell/status', 'hushbell/battery', 'hushbell/config/state'].forEach(t => this.subscribe(t));
+        [TOPICS.STATUS, TOPICS.BATTERY, TOPICS.CONFIG_STATE].forEach(t => this.subscribe(t));
       } else {
-        this._cleanup(); this._setState('error');
+        this._cleanup(); this._onDrop('error');  // refused — bounded retry while wanted
       }
     } else if (type === 3) { // PUBLISH inbound
       this._parsePublish(bytes);
@@ -1194,6 +1316,11 @@ class MqttClient {
 // ─── MQTT UI wiring ──────────────────────────────────────────────────────────
 const mqtt = new MqttClient();
 
+mqtt.onReconnect = n => {
+  const el = document.getElementById('mqttReconnects');
+  if (el) el.textContent = n;
+};
+
 mqtt.onStateChange = state => {
   const stateEl = document.getElementById('mqttState');
   const btn = document.getElementById('mqttConnectBtn');
@@ -1205,7 +1332,7 @@ mqtt.onStateChange = state => {
   if (state === 'connected') {
     if (log) log.style.display = '';
     _mqttLog('Connected → ' + document.getElementById('mqttBroker').value.trim(), '');
-    _mqttLog('Subscribed: hushbell/status | hushbell/battery | hushbell/config/state', '');
+    _mqttLog('Subscribed: ' + [TOPICS.STATUS, TOPICS.BATTERY, TOPICS.CONFIG_STATE].join(' | '), '');
   } else {
     if (log) log.style.display = 'none';
     if (state === 'disconnected') _mqttLog('Disconnected', '');
@@ -1217,11 +1344,14 @@ mqtt.onMessage = (topic, payload) => {
   _mqttLog('← ' + topic + '  ' + payload, '');
   try {
     const d = JSON.parse(payload);
-    if (topic === 'hushbell/status') {
+    if (topic === TOPICS.STATUS) {
       const el = document.getElementById('mqttEspStatus');
       if (el) el.textContent = d.online ? 'ONLINE' : 'OFFLINE';
+      // ESP32 echoing a ring back renders its OWN [HW] sigil — round-trip integrity proof.
+      const hwFreq = d.frequency != null ? d.frequency : d.freq;
+      if (hwFreq != null) renderSigil(hwFreq, d.envelope || '-', !!d.pleasant, true);
     }
-    if (topic === 'hushbell/battery') {
+    if (topic === TOPICS.BATTERY) {
       const el = document.getElementById('mqttHwBatt');
       if (el) {
         if (d.pct !== undefined) el.textContent = d.pct + '%';
@@ -1246,8 +1376,8 @@ function mqttPublishRing(freq, mode, envelope) {
     event: 'ring', freq: Math.round(freq), mode, envelope,
     t: new Date().toISOString()
   });
-  if (mqtt.publish('hushbell/ring', payload)) {
-    _mqttLog('→ hushbell/ring  ' + payload, 'out');
+  if (mqtt.publish(TOPICS.RING, payload)) {
+    _mqttLog('→ ' + TOPICS.RING + '  ' + payload, 'out');
     const el = document.getElementById('mqttLastRing');
     if (el) el.textContent = new Date().toLocaleTimeString();
   }
