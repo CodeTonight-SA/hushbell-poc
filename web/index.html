@@ -765,7 +765,7 @@ function handleRing() {
   evaluateEmergentRules();
 
   // Ring Sigil \u2014 deterministic ASCII fingerprint of THIS ring's tone (web origin).
-  renderSigil(currentSecondaryFreq, envType, isPleasant, false);
+  renderSigil(Math.round(currentSecondaryFreq), envType, isPleasant, false);
 }
 
 // ─── Frequency mode UI switching ──────────────────────────────────────────────

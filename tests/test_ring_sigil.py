@@ -99,5 +99,25 @@ def test_sigil_card_and_stack_present(html):
 
 def test_sigil_wired_to_ring_and_hw_echo(html):
     # Web-origin ring renders a sigil; the ESP32 echo renders its own [HW]-tagged sigil.
-    assert "renderSigil(currentSecondaryFreq" in html
+    # The web-origin sigil seeds from the SAME rounded freq published to MQTT.
+    assert "renderSigil(Math.round(currentSecondaryFreq)" in html
     assert "[HW] " in html
+
+
+def test_web_sigil_provenance_rounds(html):
+    """AGORA blocker fix (shared delight): mqttPublishRing publishes Math.round(freq)
+    and the ESP32 echoes that int, so the web-origin sigil MUST seed from the rounded
+    freq or it mismatches the hardware echo in random+vagal modes. Goodhart anchor:
+    fails if the sigil reverts to the bare float or the publish stops rounding."""
+    assert "renderSigil(Math.round(currentSecondaryFreq)" in html
+    assert "renderSigil(currentSecondaryFreq," not in html
+    assert "freq: Math.round(freq)" in html
+
+
+def test_rounded_roundtrip_provenance_holds():
+    """web (rounds) and HW (receives the int) seed from the same value; rounding is
+    load-bearing — the raw float seeds a different sigil (the bug being closed)."""
+    for f in (2137.68, 1847.31, 903.4):
+        r = round(f)
+        assert ring_sigil(r, "linear", False)["id"] == ring_sigil(r, "linear", False)["id"]
+        assert ring_sigil(f, "linear", False)["id"] != ring_sigil(r, "linear", False)["id"]
