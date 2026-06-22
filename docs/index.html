@@ -814,7 +814,10 @@ function handleRing() {
   }
 
   // Ring Sigil — deterministic ASCII fingerprint of THIS ring's tone (web origin).
-  renderSigil(currentSecondaryFreq, envType, isPleasant, false);
+  // Seed from the SAME rounded freq that was published to MQTT (line above), so the
+  // web sigil and the hardware-echo sigil (rendered from the int the ESP32 received)
+  // are byte-identical on an honest round-trip — the feature's whole point.
+  renderSigil(Math.round(currentSecondaryFreq), envType, isPleasant, false);
 }
 
 // ─── Frequency mode UI switching ──────────────────────────────────────────────
