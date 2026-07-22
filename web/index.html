@@ -199,6 +199,16 @@
   .ring-btn:active { opacity: 0.85; }
   .ring-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+  .ring-hint {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 4px;
+  }
+
   /* ─── FREQUENCY CONTROLS ───────────────────── */
   .freq-controls { display: flex; flex-direction: column; gap: 12px; }
 
@@ -532,6 +542,7 @@
 
   <!-- Ring Button -->
   <button class="ring-btn" id="ringBtn" onclick="handleRing()">&#x25B6; Ring HushBell</button>
+  <div class="ring-hint">[SPACE / ENTER]</div>
 
   <!-- Emergent: Battery Projection -->
   <div class="emergent-card projection" id="ec-projection">
@@ -1355,6 +1366,17 @@ async function mqttToggle() {
     mqtt.subscribe(['hushbell/status', 'hushbell/battery', 'hushbell/config/state']);
   } catch { /* onStateChange('error') already drove the UI */ }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// KEYBOARD SHORTCUTS — Space / Enter rings HushBell when no form control is focused
+// ═══════════════════════════════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if (e.code !== 'Space' && e.code !== 'Enter') return;
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+  e.preventDefault();
+  handleRing();
+});
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 initPresetChips();
