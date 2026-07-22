@@ -373,6 +373,34 @@
     color: var(--accent); word-break: break-all;
   }
 
+  /* ─── RING HISTORY LOG ────────────────────── */
+  .history-header {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .history-clear {
+    font-family: 'Courier New', Courier, monospace; font-size: 11px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    background: transparent; color: var(--text-muted);
+    border: 1px solid var(--border); padding: 2px 8px;
+    cursor: pointer; transition: color 0.1s, border-color 0.1s;
+  }
+  .history-clear:hover { color: var(--accent); border-color: var(--accent); }
+  .history-log { display: flex; flex-direction: column; }
+  .history-row {
+    display: flex; gap: 8px; align-items: baseline;
+    padding: 6px 0; border-bottom: 1px solid var(--border);
+    font-family: 'Courier New', monospace; font-size: 12px; color: var(--text);
+  }
+  .history-row:last-child { border-bottom: none; }
+  .history-ts { color: var(--text-muted); flex-shrink: 0; }
+  .history-sep { color: var(--text-muted); }
+  .history-detail { color: var(--accent); }
+  .history-empty {
+    font-family: 'Courier New', monospace; font-size: 12px;
+    color: var(--text-muted); text-align: center; padding: 12px 0;
+  }
+
   /* ─── RING SIGIL ──────────────────────────── */
   /* Deterministic ASCII fingerprint per ring — same payload, same sigil, byte-for-byte. */
   .sigil-stack { display: flex; flex-direction: column; }
@@ -585,6 +613,17 @@
   <div class="card">
     <div class="card-label">Ring Sigil — Frequency Fingerprint</div>
     <div class="sigil-stack" id="sigilStack"></div>
+  </div>
+
+  <!-- Ring History Log -->
+  <div class="card">
+    <div class="history-header">
+      <div class="card-label" style="margin-bottom:0">Ring History</div>
+      <button class="history-clear" onclick="clearRingHistory()">[CLEAR]</button>
+    </div>
+    <div class="history-log" id="historyLog">
+      <div class="history-empty">NO RINGS YET</div>
+    </div>
   </div>
 
   <!-- Emergent: Comparison -->
@@ -818,6 +857,7 @@ function handleRing() {
   // web sigil and the hardware-echo sigil (rendered from the int the ESP32 received)
   // are byte-identical on an honest round-trip — the feature's whole point.
   renderSigil(Math.round(currentSecondaryFreq), envType, isPleasant, false);
+  addRingHistory(Math.round(currentSecondaryFreq), mode, envType);
 }
 
 // ─── Frequency mode UI switching ──────────────────────────────────────────────
@@ -1354,6 +1394,44 @@ async function mqttToggle() {
     await mqtt.connect(url);
     mqtt.subscribe(['hushbell/status', 'hushbell/battery', 'hushbell/config/state']);
   } catch { /* onStateChange('error') already drove the UI */ }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RING HISTORY LOG — last 10 rings, newest first, session only
+// ═══════════════════════════════════════════════════════════════════════════════
+const ringHistory = [];
+
+function addRingHistory(freq, mode, env) {
+  const n = new Date();
+  const ts = [n.getHours(), n.getMinutes(), n.getSeconds()]
+    .map(v => String(v).padStart(2, '0')).join(':');
+  ringHistory.unshift({ ts, freq, mode, env });
+  if (ringHistory.length > 10) ringHistory.pop();
+  renderRingHistory();
+}
+
+function renderRingHistory() {
+  const log = document.getElementById('historyLog');
+  if (!log) return;
+  log.innerHTML = '';
+  if (ringHistory.length === 0) {
+    log.innerHTML = '<div class="history-empty">NO RINGS YET</div>';
+    return;
+  }
+  ringHistory.forEach(r => {
+    const row = document.createElement('div');
+    row.className = 'history-row';
+    row.innerHTML =
+      `<span class="history-ts">${r.ts}</span>` +
+      `<span class="history-sep"> · </span>` +
+      `<span class="history-detail">${r.freq}Hz · ${r.mode} · ${r.env}</span>`;
+    log.appendChild(row);
+  });
+}
+
+function clearRingHistory() {
+  ringHistory.length = 0;
+  renderRingHistory();
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
