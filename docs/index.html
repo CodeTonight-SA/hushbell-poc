@@ -464,6 +464,11 @@
           <option value="on">On (harmonics + vibrato)</option>
         </select>
       </div>
+      <div class="freq-row">
+        <label>Volume</label>
+        <input type="range" id="masterVol" min="0" max="100" value="70" oninput="updateMasterVolume(this.value)">
+        <span class="range-val" id="masterVolVal">70%</span>
+      </div>
 
       <div id="randomControls" class="sub-controls">
         <div class="freq-row">
@@ -651,6 +656,7 @@ const MAX_RINGS = 1200;
 let ringsLeft = MAX_RINGS;
 let audioCtx = null;
 let analyser = null;
+let masterGain = null;
 let rafId = null;
 let isRinging = false;
 let currentSecondaryFreq = 2000;
@@ -664,8 +670,16 @@ function initAudio() {
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = 2048;
   analyser.smoothingTimeConstant = 0.75;
-  analyser.connect(audioCtx.destination);
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = parseInt(document.getElementById('masterVol').value) / 100;
+  analyser.connect(masterGain);
+  masterGain.connect(audioCtx.destination);
   drawFFT();
+}
+
+function updateMasterVolume(val) {
+  document.getElementById('masterVolVal').textContent = val + '%';
+  if (masterGain) masterGain.gain.value = val / 100;
 }
 
 // ─── Frequency resolution (mirrors Python resolve_secondary_freq) ────────────
