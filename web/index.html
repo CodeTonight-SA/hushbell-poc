@@ -373,6 +373,46 @@
     color: var(--accent); word-break: break-all;
   }
 
+  /* ─── CARD LABEL ROW (label + action button) ── */
+  .card-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .card-label-row .card-label { margin-bottom: 0; }
+  .clear-btn {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    background: transparent;
+    border: 1px solid var(--border);
+    padding: 3px 8px;
+    cursor: pointer;
+    transition: color 0.1s, border-color 0.1s;
+  }
+  .clear-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* ─── RING HISTORY ────────────────────────── */
+  .ring-history { display: flex; flex-direction: column; }
+  .ring-history-row {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12px;
+    color: var(--text);
+    padding: 5px 0;
+    border-bottom: 1px solid var(--border);
+    display: flex; flex-wrap: wrap; gap: 0;
+  }
+  .ring-history-row:last-child { border-bottom: none; }
+  .rh-ts { color: var(--text-muted); }
+  .rh-accent { color: var(--accent); }
+  .ring-history-empty {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12px; color: var(--text-muted);
+  }
+
   /* ─── RING SIGIL ──────────────────────────── */
   /* Deterministic ASCII fingerprint per ring — same payload, same sigil, byte-for-byte. */
   .sigil-stack { display: flex; flex-direction: column; }
@@ -463,6 +503,11 @@
           <option value="off">Off</option>
           <option value="on">On (harmonics + vibrato)</option>
         </select>
+      </div>
+      <div class="freq-row">
+        <label>Volume</label>
+        <input type="range" id="masterVolume" min="0" max="100" value="70" oninput="updateMasterVolume()">
+        <span class="range-val" id="masterVolumeVal">70%</span>
       </div>
 
       <div id="randomControls" class="sub-controls">
@@ -587,6 +632,17 @@
     <div class="sigil-stack" id="sigilStack"></div>
   </div>
 
+  <!-- Ring History -->
+  <div class="card">
+    <div class="card-label-row">
+      <div class="card-label">Ring History — Last 10 Rings</div>
+      <button class="clear-btn" onclick="clearRingHistory()">[CLEAR]</button>
+    </div>
+    <div class="ring-history" id="ringHistory">
+      <div class="ring-history-empty" id="ringHistoryEmpty">NO RINGS YET</div>
+    </div>
+  </div>
+
   <!-- Emergent: Comparison -->
   <div class="emergent-card" id="ec-comparison">
     <div class="ec-label">Comparison</div>
@@ -651,6 +707,7 @@ const MAX_RINGS = 1200;
 let ringsLeft = MAX_RINGS;
 let audioCtx = null;
 let analyser = null;
+let masterGain = null;
 let rafId = null;
 let isRinging = false;
 let currentSecondaryFreq = 2000;
@@ -664,7 +721,10 @@ function initAudio() {
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = 2048;
   analyser.smoothingTimeConstant = 0.75;
-  analyser.connect(audioCtx.destination);
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = parseInt(document.getElementById('masterVolume').value) / 100;
+  analyser.connect(masterGain);
+  masterGain.connect(audioCtx.destination);
   drawFFT();
 }
 
@@ -794,6 +854,7 @@ function handleRing() {
   const mode = document.getElementById('freqMode').value;
   const envType = document.getElementById('envelopeType').value;
   setStatus('ACTIVE', 'FADING IN', Math.round(currentSecondaryFreq) + 'Hz', envType + ' ' + fadeInSec + 's', duration + 's');
+  addRingHistory(Math.round(currentSecondaryFreq), mode, envType);
   animateLEDs(duration * 1000);
 
   setTimeout(() => {
@@ -818,6 +879,49 @@ function handleRing() {
   // web sigil and the hardware-echo sigil (rendered from the int the ESP32 received)
   // are byte-identical on an honest round-trip — the feature's whole point.
   renderSigil(Math.round(currentSecondaryFreq), envType, isPleasant, false);
+}
+
+// ─── Master volume ────────────────────────────────────────────────────────────
+function updateMasterVolume() {
+  const val = parseInt(document.getElementById('masterVolume').value);
+  document.getElementById('masterVolumeVal').textContent = val + '%';
+  if (masterGain) masterGain.gain.value = val / 100;
+}
+
+// ─── Ring history (session-only, last 10 rings) ────────────────────────────────
+const ringHistory = [];
+const MAX_HISTORY = 10;
+
+function addRingHistory(freq, mode, env) {
+  const now = new Date();
+  const ts = now.toTimeString().slice(0, 8);
+  ringHistory.unshift({ ts, freq, mode, env });
+  if (ringHistory.length > MAX_HISTORY) ringHistory.length = MAX_HISTORY;
+  renderRingHistory();
+}
+
+function renderRingHistory() {
+  const container = document.getElementById('ringHistory');
+  const empty = document.getElementById('ringHistoryEmpty');
+  container.querySelectorAll('.ring-history-row').forEach(el => el.remove());
+  if (ringHistory.length === 0) { empty.style.display = ''; return; }
+  empty.style.display = 'none';
+  ringHistory.forEach(ev => {
+    const row = document.createElement('div');
+    row.className = 'ring-history-row';
+    row.innerHTML =
+      '<span class="rh-ts">' + ev.ts + '</span>' +
+      '<span>&nbsp;&middot;&nbsp;</span>' +
+      '<span class="rh-accent">' + ev.freq + 'Hz&nbsp;&middot;&nbsp;' + ev.mode + '</span>' +
+      '<span>&nbsp;&middot;&nbsp;</span>' +
+      '<span>' + ev.env + '</span>';
+    container.appendChild(row);
+  });
+}
+
+function clearRingHistory() {
+  ringHistory.length = 0;
+  renderRingHistory();
 }
 
 // ─── Frequency mode UI switching ──────────────────────────────────────────────
