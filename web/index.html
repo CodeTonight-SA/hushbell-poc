@@ -947,6 +947,15 @@ function drawFFT() {
       ctx.setLineDash([]);
     });
 
+    // 67Hz dog hearing floor marker — dashed [4,4], text-muted, neutral
+    const textMuted = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim();
+    const x67 = Math.round(67 / maxFreq * W);
+    ctx.strokeStyle = textMuted;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(x67, 0); ctx.lineTo(x67, H); ctx.stroke();
+    ctx.setLineDash([]);
+
     const barW = W / maxBin;
     const barIdle = getComputedStyle(document.documentElement).getPropertyValue('--bar-idle').trim();
     for (let i = 0; i < maxBin; i++) {
@@ -967,6 +976,8 @@ function drawFFT() {
     ctx.fillStyle = '#FFBF00';
     const xSec = Math.round(secFreq / maxFreq * W);
     ctx.fillText(Math.round(secFreq) + 'Hz', Math.max(3, xSec - 20), 14);
+    ctx.fillStyle = textMuted;
+    ctx.fillText('67Hz DOG ↓', x67 + 3, 26);
   }
   draw();
 }
