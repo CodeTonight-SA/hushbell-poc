@@ -199,6 +199,16 @@
   .ring-btn:active { opacity: 0.85; }
   .ring-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+  .kbd-hint {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 6px;
+  }
+
   /* ─── FREQUENCY CONTROLS ───────────────────── */
   .freq-controls { display: flex; flex-direction: column; gap: 12px; }
 
@@ -577,6 +587,7 @@
 
   <!-- Ring Button -->
   <button class="ring-btn" id="ringBtn" onclick="handleRing()">&#x25B6; Ring HushBell</button>
+  <div class="kbd-hint">[SPACE / ENTER]</div>
 
   <!-- Emergent: Battery Projection -->
   <div class="emergent-card projection" id="ec-projection">
@@ -1039,9 +1050,19 @@ function drawFFT() {
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
     });
 
-    // Dynamic markers: 40Hz + current secondary frequency
+    // Dynamic markers: 67Hz dog hearing floor + 40Hz + secondary frequency
     const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+    const textMuted = getComputedStyle(document.documentElement).getPropertyValue('--text-muted').trim();
     const secFreq = currentSecondaryFreq;
+
+    // 67Hz dog hearing floor — neutral [4,4] dash to distinguish from tone markers
+    const x67 = Math.round(67 / maxFreq * W);
+    ctx.strokeStyle = textMuted;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(x67, 0); ctx.lineTo(x67, H); ctx.stroke();
+    ctx.setLineDash([]);
+
     [[40, accent], [secFreq, '#FFBF00']].forEach(([f, color]) => {
       const x = Math.round(f / maxFreq * W);
       ctx.strokeStyle = color;
@@ -1071,6 +1092,8 @@ function drawFFT() {
     ctx.fillStyle = '#FFBF00';
     const xSec = Math.round(secFreq / maxFreq * W);
     ctx.fillText(Math.round(secFreq) + 'Hz', Math.max(3, xSec - 20), 14);
+    ctx.fillStyle = textMuted;
+    ctx.fillText('67Hz DOG ↓', x67 + 3, 26);
   }
   draw();
 }
@@ -1461,6 +1484,15 @@ async function mqttToggle() {
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
+// ─── Keyboard shortcut: Space / Enter triggers ring ────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.code !== 'Space' && e.code !== 'Enter') return;
+  const tag = document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+  e.preventDefault();
+  handleRing();
+});
+
 initPresetChips();
 probeHAL();
 setInterval(probeHAL, 30000);
