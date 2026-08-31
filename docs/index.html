@@ -413,6 +413,17 @@
     font-size: 12px; color: var(--text-muted);
   }
 
+  /* ─── KEYBOARD HINT ──────────────────────── */
+  .kbd-hint {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 6px;
+  }
+
   /* ─── RING SIGIL ──────────────────────────── */
   /* Deterministic ASCII fingerprint per ring — same payload, same sigil, byte-for-byte. */
   .sigil-stack { display: flex; flex-direction: column; }
@@ -577,6 +588,7 @@
 
   <!-- Ring Button -->
   <button class="ring-btn" id="ringBtn" onclick="handleRing()">&#x25B6; Ring HushBell</button>
+  <div class="kbd-hint">[SPACE / ENTER]</div>
 
   <!-- Emergent: Battery Projection -->
   <div class="emergent-card projection" id="ec-projection">
@@ -1459,6 +1471,17 @@ async function mqttToggle() {
     mqtt.subscribe(['hushbell/status', 'hushbell/battery', 'hushbell/config/state']);
   } catch { /* onStateChange('error') already drove the UI */ }
 }
+
+// ─── Keyboard shortcut — Space/Enter triggers ring, guarded against form fields ──
+document.addEventListener('keydown', e => {
+  if (e.repeat) return;
+  const tag = document.activeElement && document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+  if (e.code === 'Space' || e.code === 'Enter') {
+    e.preventDefault();
+    handleRing();
+  }
+});
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 initPresetChips();
