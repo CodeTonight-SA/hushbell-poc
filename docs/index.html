@@ -577,6 +577,7 @@
 
   <!-- Ring Button -->
   <button class="ring-btn" id="ringBtn" onclick="handleRing()">&#x25B6; Ring HushBell</button>
+  <div style="text-align:center; font-family:'Courier New',monospace; font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); margin-top:6px;">[SPACE / ENTER]</div>
 
   <!-- Emergent: Battery Projection -->
   <div class="emergent-card projection" id="ec-projection">
@@ -1459,6 +1460,15 @@ async function mqttToggle() {
     mqtt.subscribe(['hushbell/status', 'hushbell/battery', 'hushbell/config/state']);
   } catch { /* onStateChange('error') already drove the UI */ }
 }
+
+// ─── Keyboard shortcut: Space / Enter triggers ring ───────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.code !== 'Space' && e.code !== 'Enter') return;
+  const tag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+  if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+  e.preventDefault();
+  handleRing();
+});
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 initPresetChips();
